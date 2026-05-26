@@ -1,0 +1,20 @@
+name: Nightly Sync Job
+
+on:
+  schedule:
+    # Runs at 02:00 UTC every day
+    - cron: '0 2 * * *'
+  workflow_dispatch: # Allows manual triggering from the Actions tab
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Hit Backend Sync Endpoint
+        env:
+          BACKEND_URL: ${{ secrets.BACKEND_URL }}
+          SYNC_SECRET: ${{ secrets.SYNC_SECRET }}
+        run: |
+          curl -X POST "$BACKEND_URL/api/sync" \
+          -H "Authorization: Bearer $SYNC_SECRET" \
+          -H "Content-Type: application/json"

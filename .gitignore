@@ -1,0 +1,46 @@
+# Dependencies
+node_modules/
+
+# Environment variables
+.env
+.env.*
+!.env.example
+
+# AI agent and system files
+.claude/
+.claude
+AGENTS.md
+CLAUDE.md
+.DS_Store
+
+# Backend specific
+firebase-service-account.json
+
+# Next.js / React (parent-dashboard)
+.next/
+out/
+build/
+
+# Expo / React Native (child-app)
+.expo/
+dist/
+web-build/
+expo-env.d.ts
+.kotlin/
+*.orig.*
+*.jks
+*.p8
+*.p12
+*.key
+*.mobileprovision
+.metro-health-check*
+
+# Debug logs
+npm-debug.*
+yarn-debug.*
+yarn-error.*
+*.tsbuildinfo
+
+# Generated native folders
+/child-app/ios/
+/child-app/android/
