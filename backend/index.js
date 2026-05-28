@@ -489,6 +489,20 @@ app.listen(PORT, () => {
   // Pings its own /health endpoint every 14 minutes (840000 ms)
   const PING_URL = process.env.PING_URL || 'https://kidtube-almy.onrender.com/health';
   setInterval(() => {
+    // Get current hour in IST (Asia/Kolkata)
+    const formatter = new Intl.DateTimeFormat('en-US', {
+      timeZone: 'Asia/Kolkata',
+      hour: 'numeric',
+      hourCycle: 'h23'
+    });
+    const currentHourIST = parseInt(formatter.format(new Date()), 10);
+
+    // Skip pinging from 1 AM to 3:59 AM to save free tier hours
+    if (currentHourIST >= 1 && currentHourIST < 4) {
+      console.log(`[KeepAlive] Sleeping. Current hour is ${currentHourIST} AM.`);
+      return;
+    }
+
     fetch(PING_URL)
       .then(res => {
         if (res.ok) console.log(`[KeepAlive] Successfully pinged ${PING_URL}`);
