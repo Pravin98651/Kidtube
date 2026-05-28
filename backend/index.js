@@ -484,4 +484,16 @@ app.delete('/api/account', async (req, res) => {
 
 app.listen(PORT, () => {
   console.log(`KidTube Backend API listening on port ${PORT}`);
+  
+  // Internal Cron Job to prevent Render free tier spin-down
+  // Pings its own /health endpoint every 14 minutes (840000 ms)
+  const PING_URL = process.env.PING_URL || 'https://kidtube-almy.onrender.com/health';
+  setInterval(() => {
+    fetch(PING_URL)
+      .then(res => {
+        if (res.ok) console.log(`[KeepAlive] Successfully pinged ${PING_URL}`);
+        else console.log(`[KeepAlive] Ping failed with status: ${res.status}`);
+      })
+      .catch(err => console.error(`[KeepAlive] Error pinging ${PING_URL}:`, err.message));
+  }, 14 * 60 * 1000);
 });
