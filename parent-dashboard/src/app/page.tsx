@@ -39,7 +39,7 @@ export default function Home() {
 
   const fetchSettings = async (token: string) => {
     try {
-      const response = await fetch('http://localhost:8080/api/settings', {
+      const response = await fetch('https://kidtube-almy.onrender.com/api/settings', {
         headers: { 'Authorization': `Bearer ${token}` }
       });
       const data = await response.json();
@@ -53,7 +53,7 @@ export default function Home() {
 
   const fetchChannels = async (token: string) => {
     try {
-      const response = await fetch('http://localhost:8080/api/channels', {
+      const response = await fetch('https://kidtube-almy.onrender.com/api/channels', {
         headers: { 'Authorization': `Bearer ${token}` }
       });
       const data = await response.json();
@@ -68,7 +68,7 @@ export default function Home() {
     setDisableShorts(newValue);
     const token = localStorage.getItem('kidtube_token');
     try {
-      await fetch('http://localhost:8080/api/settings', {
+      await fetch('https://kidtube-almy.onrender.com/api/settings', {
         method: 'POST',
         headers: { 
           'Content-Type': 'application/json',
@@ -93,7 +93,7 @@ export default function Home() {
     const query = newChannel.trim();
 
     try {
-      const response = await fetch('http://localhost:8080/api/channels', {
+      const response = await fetch('https://kidtube-almy.onrender.com/api/channels', {
         method: 'POST',
         headers: { 
           'Content-Type': 'application/json',
@@ -122,7 +122,7 @@ export default function Home() {
     if (!confirm('Are you sure you want to remove this channel?')) return;
     const token = localStorage.getItem('kidtube_token');
     try {
-      await fetch(`http://localhost:8080/api/channels/${id}`, {
+      await fetch(`https://kidtube-almy.onrender.com/api/channels/${id}`, {
         method: 'DELETE',
         headers: { 'Authorization': `Bearer ${token}` }
       });
@@ -142,7 +142,7 @@ export default function Home() {
     const token = localStorage.getItem('kidtube_token');
     
     try {
-      const response = await fetch('http://localhost:8080/api/device-password', {
+      const response = await fetch('https://kidtube-almy.onrender.com/api/device-password', {
         method: 'POST',
         headers: { 
           'Content-Type': 'application/json',

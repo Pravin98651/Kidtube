@@ -1,5 +1,5 @@
 import { StatusBar } from 'expo-status-bar';
-import { StyleSheet, Text, View, SafeAreaView, TouchableOpacity, Image, Platform, ActivityIndicator, FlatList, Dimensions, TextInput, KeyboardAvoidingView } from 'react-native';
+import { StyleSheet, Text, View, SafeAreaView, TouchableOpacity, Image, Platform, ActivityIndicator, FlatList, Dimensions, TextInput, KeyboardAvoidingView, ScrollView } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import SafeVideoPlayer from './components/SafeVideoPlayer';
 import { useState, useEffect, memo, useCallback } from 'react';
@@ -62,26 +62,6 @@ const VideoCard = memo(({ video, onPress }: { video: Video, onPress: () => void 
 });
 VideoCard.displayName = 'VideoCard';
 
-// Memoized Shorts Card (Full Screen vertical scroll)
-const ShortCard = memo(({ video, isActive }: { video: Video, isActive: boolean }) => {
-  return (
-    <View style={styles.shortContainer}>
-      {isActive ? (
-        <View style={styles.shortPlayerWrapper}>
-          <SafeVideoPlayer videoId={video.videoId} />
-        </View>
-      ) : (
-        <Image source={{ uri: getThumbnailUrl(video) }} style={styles.shortThumbnail} resizeMode="cover" />
-      )}
-      <View style={styles.shortOverlay}>
-        <Text style={styles.shortTitle} numberOfLines={2}>{video.title}</Text>
-        <Text style={styles.shortSubtitle}>{video.channelTitle}</Text>
-      </View>
-    </View>
-  );
-});
-ShortCard.displayName = 'ShortCard';
-
 export default function App() {
   const [token, setToken] = useState<string | null>(null);
   const [email, setEmail] = useState('');
@@ -92,14 +72,14 @@ export default function App() {
   const [activeVideo, setActiveVideo] = useState<string | null>(null);
   const [selectedCategory, setSelectedCategory] = useState<string>('All');
   const [currentTab, setCurrentTab] = useState<'Home' | 'Shorts'>('Home');
-  const [activeShortIndex, setActiveShortIndex] = useState(0);
+  // Track which short is currently playing
+  const [playingShortId, setPlayingShortId] = useState<string | null>(null);
   
   const [videos, setVideos] = useState<Video[]>([]);
   const [categories, setCategories] = useState<string[]>(['All']);
   const [loading, setLoading] = useState(false);
 
-  // Using the new ultra-stable auto-restarting tunnel!
-  const baseUrl = Platform.OS === 'web' || Platform.OS === 'ios' ? 'http://localhost:8080' : 'https://kidtube-backend-stable.loca.lt';
+  const baseUrl = 'https://kidtube-almy.onrender.com';
 
   useEffect(() => {
     const checkToken = async () => {
@@ -118,8 +98,8 @@ export default function App() {
       setLoading(true);
       try {
         const [vidRes, chanRes] = await Promise.all([
-          fetch(`${baseUrl}/api/videos`, { headers: { 'Authorization': `Bearer ${token}`, 'Bypass-Tunnel-Reminder': 'true' } }),
-          fetch(`${baseUrl}/api/channels`, { headers: { 'Authorization': `Bearer ${token}`, 'Bypass-Tunnel-Reminder': 'true' } })
+          fetch(`${baseUrl}/api/videos`, { headers: { 'Authorization': `Bearer ${token}` } }),
+          fetch(`${baseUrl}/api/channels`, { headers: { 'Authorization': `Bearer ${token}` } })
         ]);
 
         if (vidRes.ok && chanRes.ok) {
@@ -147,7 +127,7 @@ export default function App() {
     try {
       const res = await fetch(`${baseUrl}/api/login`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'Bypass-Tunnel-Reminder': 'true' },
+        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ email, password })
       });
       const data = await res.json();
@@ -166,12 +146,6 @@ export default function App() {
     await AsyncStorage.removeItem('kidtube_token');
     setToken(null);
   };
-
-  const onViewableItemsChanged = useCallback(({ viewableItems }: any) => {
-    if (viewableItems.length > 0) {
-      setActiveShortIndex(viewableItems[0].index);
-    }
-  }, []);
 
   if (!token) {
     return (
@@ -215,6 +189,14 @@ export default function App() {
     ? regularVideos 
     : regularVideos.filter(v => v.channelTitle === selectedCategory);
 
+  // Auto-play first short when switching to Shorts tab
+  const handleShortsTab = () => {
+    setCurrentTab('Shorts');
+    if (shortsVideos.length > 0 && !playingShortId) {
+      setPlayingShortId(shortsVideos[0].videoId);
+    }
+  };
+
   const ListHeader = () => (
     <View style={styles.headerSection}>
       <View style={styles.header}>
@@ -243,67 +225,171 @@ export default function App() {
           contentContainerStyle={styles.categoriesContainer}
         />
       </View>
-      {activeVideo && (
-        <View style={styles.playerSection}>
-          <SafeVideoPlayer videoId={activeVideo} />
-          <TouchableOpacity style={styles.closeButton} onPress={() => setActiveVideo(null)}>
-            <Text style={styles.closeButtonText}>Close Video</Text>
-          </TouchableOpacity>
-        </View>
-      )}
     </View>
   );
 
+  // ===== SHORTS TAB =====
+  const renderShortsTab = () => {
+    if (shortsVideos.length === 0) {
+      return (
+        <View style={styles.shortsContainer}>
+          <View style={styles.shortsHeader}>
+            <View style={styles.youtubeIcon}><View style={styles.playTriangle} /></View>
+            <Text style={styles.shortsHeaderTitle}>Shorts</Text>
+          </View>
+          <View style={styles.shortsEmptyContainer}>
+            <Text style={styles.shortsEmptyIcon}>⚡</Text>
+            <Text style={styles.shortsEmptyTitle}>No Shorts yet</Text>
+            <Text style={styles.shortsEmptySubtitle}>
+              Shorts from your approved channels will appear here.{'\n'}
+              Make sure "Disable Shorts" is turned off in the Parent Dashboard.
+            </Text>
+          </View>
+        </View>
+      );
+    }
+
+    return (
+      <View style={styles.shortsContainer}>
+        {/* Shorts Header */}
+        <View style={styles.shortsHeader}>
+          <View style={styles.youtubeIcon}><View style={styles.playTriangle} /></View>
+          <Text style={styles.shortsHeaderTitle}>Shorts</Text>
+        </View>
+
+        {/* Vertical scrolling shorts feed */}
+        <ScrollView
+          pagingEnabled
+          showsVerticalScrollIndicator={false}
+          decelerationRate="fast"
+          snapToInterval={SCREEN_HEIGHT - 190}
+          snapToAlignment="start"
+          onMomentumScrollEnd={(e) => {
+            const index = Math.round(e.nativeEvent.contentOffset.y / (SCREEN_HEIGHT - 190));
+            const safeIndex = Math.min(index, shortsVideos.length - 1);
+            if (safeIndex >= 0 && shortsVideos[safeIndex]) {
+              setPlayingShortId(shortsVideos[safeIndex].videoId);
+            }
+          }}
+        >
+          {shortsVideos.map((video) => (
+            <View key={video.videoId} style={styles.shortCard}>
+              {/* Background thumbnail (always visible behind player) */}
+              <Image 
+                source={{ uri: getThumbnailUrl(video) }} 
+                style={StyleSheet.absoluteFill} 
+                resizeMode="cover"
+                blurRadius={3}
+              />
+              <View style={[StyleSheet.absoluteFill, { backgroundColor: 'rgba(0,0,0,0.4)' }]} />
+
+              {/* Video Player (only for the active short) */}
+              {playingShortId === video.videoId ? (
+                <View style={styles.shortPlayerWrapper}>
+                  <SafeVideoPlayer videoId={video.videoId} vertical={true} />
+                </View>
+              ) : (
+                <TouchableOpacity 
+                  style={styles.shortPlayButton}
+                  onPress={() => setPlayingShortId(video.videoId)}
+                  activeOpacity={0.8}
+                >
+                  <View style={styles.shortPlayIcon}>
+                    <View style={styles.shortPlayTriangle} />
+                  </View>
+                </TouchableOpacity>
+              )}
+
+              {/* Video info overlay */}
+              <View style={styles.shortOverlay}>
+                <Text style={styles.shortTitle} numberOfLines={2}>{video.title}</Text>
+                <View style={styles.shortChannelRow}>
+                  <Image 
+                    source={{ uri: `https://ui-avatars.com/api/?name=${encodeURIComponent(video.channelTitle)}&background=random&color=fff&rounded=true&size=32` }} 
+                    style={styles.shortChannelAvatar} 
+                  />
+                  <Text style={styles.shortSubtitle}>{video.channelTitle}</Text>
+                </View>
+              </View>
+
+              {/* Right side actions */}
+              <View style={styles.shortActions}>
+                <View style={styles.shortActionItem}>
+                  <Text style={styles.shortActionIcon}>👍</Text>
+                  <Text style={styles.shortActionLabel}>Like</Text>
+                </View>
+                <View style={styles.shortActionItem}>
+                  <Text style={styles.shortActionIcon}>👎</Text>
+                  <Text style={styles.shortActionLabel}>Dislike</Text>
+                </View>
+                <View style={styles.shortActionItem}>
+                  <Text style={styles.shortActionIcon}>💬</Text>
+                  <Text style={styles.shortActionLabel}>Chat</Text>
+                </View>
+              </View>
+            </View>
+          ))}
+        </ScrollView>
+      </View>
+    );
+  };
+
   return (
     <SafeAreaView style={styles.container}>
-      <StatusBar style="dark" />
+      <StatusBar style={currentTab === 'Shorts' ? 'light' : 'dark'} />
       
       {currentTab === 'Home' ? (
-        <FlatList
-          data={filteredHomeVideos}
-          keyExtractor={(item) => item.videoId}
-          ListHeaderComponent={ListHeader}
-          showsVerticalScrollIndicator={false}
-          renderItem={({ item }) => (
-            <VideoCard video={item} onPress={() => setActiveVideo(item.videoId)} />
+        <View style={{ flex: 1 }}>
+          {activeVideo && (
+            <View style={styles.playerSectionPinned}>
+              <SafeVideoPlayer key={activeVideo} videoId={activeVideo} />
+              <View style={styles.playerInfoRow}>
+                <Text style={styles.nowPlayingText}>Now Playing</Text>
+                <TouchableOpacity style={styles.closeButtonSmall} onPress={() => setActiveVideo(null)}>
+                  <Text style={styles.closeButtonTextSmall}>✕ Close</Text>
+                </TouchableOpacity>
+              </View>
+            </View>
           )}
-          ListEmptyComponent={
-            loading ? <ActivityIndicator size="large" color="#FF0000" style={{ marginTop: 40 }} />
-            : <Text style={styles.emptyText}>No videos available. Ask your parent to approve a channel!</Text>
-          }
-        />
-      ) : (
-        <View style={styles.shortsContainer}>
           <FlatList
-            data={shortsVideos}
+            data={filteredHomeVideos}
             keyExtractor={(item) => item.videoId}
-            pagingEnabled
+            ListHeaderComponent={ListHeader}
             showsVerticalScrollIndicator={false}
-            onViewableItemsChanged={onViewableItemsChanged}
-            viewabilityConfig={{ itemVisiblePercentThreshold: 80 }}
-            renderItem={({ item, index }) => (
-              <ShortCard video={item} isActive={index === activeShortIndex} />
+            renderItem={({ item }) => (
+              <VideoCard video={item} onPress={() => setActiveVideo(item.videoId)} />
             )}
             ListEmptyComponent={
-              <Text style={[styles.emptyText, { color: '#FFF' }]}>No Shorts available.</Text>
+              loading ? <ActivityIndicator size="large" color="#FF0000" style={{ marginTop: 40 }} />
+              : <Text style={styles.emptyText}>No videos available. Ask your parent to approve a channel!</Text>
             }
           />
         </View>
+      ) : (
+        renderShortsTab()
       )}
 
       {/* Bottom Nav */}
-      <View style={styles.bottomNav}>
-        <TouchableOpacity style={styles.navItem} onPress={() => setCurrentTab('Home')}>
+      <View style={[styles.bottomNav, currentTab === 'Shorts' && styles.bottomNavDark]}>
+        <TouchableOpacity style={styles.navItem} onPress={() => { setCurrentTab('Home'); setPlayingShortId(null); }}>
           <Text style={[styles.navIcon, currentTab === 'Home' && styles.navActive]}>🏠</Text>
-          <Text style={styles.navLabel}>Home</Text>
+          <Text style={[styles.navLabel, currentTab === 'Shorts' && { color: '#FFF' }]}>Home</Text>
         </TouchableOpacity>
-        <TouchableOpacity style={styles.navItem} onPress={() => setCurrentTab('Shorts')}>
+        <TouchableOpacity style={styles.navItem} onPress={handleShortsTab}>
           <Text style={[styles.navIcon, currentTab === 'Shorts' && styles.navActive]}>⚡</Text>
-          <Text style={styles.navLabel}>Shorts</Text>
+          <Text style={[styles.navLabel, currentTab === 'Shorts' && { color: '#FFF' }]}>Shorts</Text>
         </TouchableOpacity>
-        <View style={styles.navItemPlus}><Text style={styles.navPlusIcon}>+</Text></View>
-        <View style={styles.navItem}><Text style={styles.navIcon}>📺</Text><Text style={styles.navLabel}>Subs</Text></View>
-        <View style={styles.navItem}><Text style={styles.navIcon}>📁</Text><Text style={styles.navLabel}>Library</Text></View>
+        <View style={[styles.navItemPlus, currentTab === 'Shorts' && { borderColor: '#FFF' }]}>
+          <Text style={[styles.navPlusIcon, currentTab === 'Shorts' && { color: '#FFF' }]}>+</Text>
+        </View>
+        <View style={styles.navItem}>
+          <Text style={styles.navIcon}>📺</Text>
+          <Text style={[styles.navLabel, currentTab === 'Shorts' && { color: '#FFF' }]}>Subs</Text>
+        </View>
+        <View style={styles.navItem}>
+          <Text style={styles.navIcon}>📁</Text>
+          <Text style={[styles.navLabel, currentTab === 'Shorts' && { color: '#FFF' }]}>Library</Text>
+        </View>
       </View>
     </SafeAreaView>
   );
@@ -331,9 +417,11 @@ const styles = StyleSheet.create({
   categoryPillActive: { backgroundColor: '#0F0F0F' },
   categoryText: { color: '#0F0F0F', fontSize: 14, fontWeight: '500' },
   categoryTextActive: { color: '#FFFFFF' },
-  playerSection: { backgroundColor: '#000', width: '100%' },
-  closeButton: { padding: 12, alignItems: 'center', backgroundColor: '#222' },
-  closeButtonText: { color: '#FFF', fontWeight: '600' },
+  playerSectionPinned: { backgroundColor: '#000', width: '100%', elevation: 5, zIndex: 10, shadowColor: '#000', shadowOffset: {width:0, height:4}, shadowOpacity: 0.1, shadowRadius: 4 },
+  playerInfoRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingHorizontal: 16, paddingVertical: 12, backgroundColor: '#FFFFFF', borderBottomWidth: 1, borderBottomColor: '#E5E5E5' },
+  nowPlayingText: { fontSize: 16, fontWeight: '700', color: '#0F0F0F' },
+  closeButtonSmall: { backgroundColor: '#F2F2F2', paddingHorizontal: 12, paddingVertical: 6, borderRadius: 16 },
+  closeButtonTextSmall: { color: '#0F0F0F', fontSize: 13, fontWeight: '600' },
   videoCard: { marginBottom: 16 },
   thumbnail: { width: '100%', aspectRatio: 16 / 9, backgroundColor: '#E5E5E5' },
   durationBadge: { position: 'absolute', bottom: 70, right: 8, backgroundColor: 'rgba(0,0,0,0.8)', paddingHorizontal: 4, paddingVertical: 2, borderRadius: 4 },
@@ -348,15 +436,30 @@ const styles = StyleSheet.create({
   emptyText: { padding: 40, textAlign: 'center', color: '#606060' },
   
   // Shorts Styles
-  shortsContainer: { flex: 1, backgroundColor: '#000' },
-  shortContainer: { height: SCREEN_HEIGHT - 60, width: SCREEN_WIDTH, justifyContent: 'center', backgroundColor: '#111' },
-  shortPlayerWrapper: { width: '100%', height: '100%', justifyContent: 'center' },
-  shortThumbnail: { width: '100%', height: '100%', opacity: 0.5 },
-  shortOverlay: { position: 'absolute', bottom: 100, left: 16, right: 16 },
-  shortTitle: { color: '#FFF', fontSize: 18, fontWeight: 'bold', marginBottom: 8, textShadowColor: 'rgba(0,0,0,0.5)', textShadowOffset: {width:1,height:1}, textShadowRadius: 3 },
-  shortSubtitle: { color: '#FFF', fontSize: 14, opacity: 0.8 },
+  shortsContainer: { flex: 1, backgroundColor: '#0F0F0F' },
+  shortsHeader: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 14, paddingVertical: 10, backgroundColor: '#0F0F0F' },
+  shortsHeaderTitle: { fontSize: 20, fontWeight: '700', color: '#FFFFFF', letterSpacing: -0.5 },
+  shortsEmptyContainer: { flex: 1, justifyContent: 'center', alignItems: 'center', paddingHorizontal: 40 },
+  shortsEmptyIcon: { fontSize: 48, marginBottom: 16 },
+  shortsEmptyTitle: { fontSize: 20, fontWeight: '700', color: '#FFFFFF', marginBottom: 8 },
+  shortsEmptySubtitle: { fontSize: 14, color: '#AAAAAA', textAlign: 'center', lineHeight: 22 },
+  shortCard: { width: SCREEN_WIDTH, height: SCREEN_HEIGHT - 190, backgroundColor: '#000', overflow: 'hidden', justifyContent: 'center' },
+  shortPlayerWrapper: { width: '100%', justifyContent: 'center', alignItems: 'center' },
+  shortPlayButton: { flex: 1, justifyContent: 'center', alignItems: 'center' },
+  shortPlayIcon: { width: 64, height: 64, borderRadius: 32, backgroundColor: 'rgba(255,255,255,0.3)', justifyContent: 'center', alignItems: 'center' },
+  shortPlayTriangle: { width: 0, height: 0, borderStyle: 'solid', borderLeftWidth: 20, borderBottomWidth: 14, borderTopWidth: 14, borderLeftColor: '#FFFFFF', borderRightColor: 'transparent', borderBottomColor: 'transparent', borderTopColor: 'transparent', marginLeft: 6 },
+  shortOverlay: { position: 'absolute', bottom: 16, left: 14, right: 70 },
+  shortTitle: { color: '#FFF', fontSize: 14, fontWeight: '600', marginBottom: 10, textShadowColor: 'rgba(0,0,0,0.8)', textShadowOffset: {width:1,height:1}, textShadowRadius: 4, lineHeight: 20 },
+  shortChannelRow: { flexDirection: 'row', alignItems: 'center' },
+  shortChannelAvatar: { width: 28, height: 28, borderRadius: 14, marginRight: 8, borderWidth: 1, borderColor: 'rgba(255,255,255,0.3)' },
+  shortSubtitle: { color: '#FFF', fontSize: 13, fontWeight: '500' },
+  shortActions: { position: 'absolute', right: 10, bottom: 80, alignItems: 'center', gap: 20 },
+  shortActionItem: { alignItems: 'center' },
+  shortActionIcon: { fontSize: 24, marginBottom: 2 },
+  shortActionLabel: { color: '#FFF', fontSize: 10, fontWeight: '500' },
 
-  bottomNav: { flexDirection: 'row', justifyContent: 'space-around', alignItems: 'center', paddingVertical: 8, paddingBottom: Platform.OS === 'ios' ? 24 : 8, backgroundColor: '#FFFFFF', borderTopWidth: 1, borderTopColor: '#E5E5E5' },
+  bottomNav: { flexDirection: 'row', justifyContent: 'space-around', alignItems: 'center', paddingVertical: 8, paddingBottom: Platform.OS === 'ios' ? 24 : 30, backgroundColor: '#FFFFFF', borderTopWidth: 1, borderTopColor: '#E5E5E5' },
+  bottomNavDark: { backgroundColor: '#0F0F0F', borderTopColor: '#272727' },
   navItem: { alignItems: 'center' },
   navIcon: { fontSize: 20, marginBottom: 4, opacity: 0.5 },
   navActive: { opacity: 1 },
