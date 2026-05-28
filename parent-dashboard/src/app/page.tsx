@@ -136,15 +136,16 @@ export default function Home() {
 
       const data = await response.json();
       
-      if (!response.ok) {
-        throw new Error(data.error || 'Failed to add channel');
+      if (response.ok) {
+        setNewChannel('');
+        setMessage({ text: data.message || `Successfully processed channels.`, type: 'success' });
+        // Refresh channels
+        fetchChannels(token || '');
+      } else {
+        setMessage({ text: data.error || 'Failed to add channels.', type: 'error' });
       }
-
-      setMessage({ text: `Success! Added channel and processed ${data.videosProcessed} videos.`, type: 'success' });
-      setNewChannel('');
-      fetchChannels(localStorage.getItem('kidtube_token') || '');
-    } catch (error: any) {
-      setMessage({ text: `Error: ${error.message}`, type: 'error' });
+    } catch (error) {
+      setMessage({ text: 'Network error. Please try again.', type: 'error' });
     } finally {
       setLoading(false);
     }
@@ -286,18 +287,18 @@ export default function Home() {
 
           <section className="bg-white dark:bg-gray-800 p-6 rounded-2xl shadow-sm border border-gray-100 dark:border-gray-700">
             <h2 className="text-xl font-semibold mb-4">Allow a New Channel</h2>
+            <p className="text-sm text-gray-500 mb-6">Enter a YouTube channel handle (e.g., @Blippi) or a comma-separated list to add multiple channels at once.</p>
             <form onSubmit={handleAddChannel} className="flex gap-4">
               <input
                 type="text"
                 value={newChannel}
                 onChange={(e) => setNewChannel(e.target.value)}
-                placeholder="e.g. @KhanAcademy or UC... ID"
+                placeholder="e.g. @Blippi, @Cocomelon, @SciShow"
                 className="flex-1 px-4 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 dark:bg-gray-900 dark:border-gray-700"
                 disabled={loading}
               />
               <button
                 type="submit"
-                disabled={loading || !newChannel}
                 className="px-6 py-2 bg-blue-600 hover:bg-blue-700 disabled:opacity-50 text-white font-medium rounded-lg transition-colors"
               >
                 {loading ? 'Adding...' : 'Allow Channel'}

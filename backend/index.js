@@ -108,78 +108,95 @@ app.post('/api/device-password', authenticate, async (req, res) => {
 
 // Removed manual Google Auth endpoint because Firebase handles it now on the client.
 
-// Endpoint: Add a new channel to whitelist
+// Endpoint: Add new channels to whitelist (supports comma separated list)
 app.post('/api/channels', authenticate, async (req, res) => {
   const { query } = req.body;
   const userId = req.user.uid;
   
   if (!query) {
-    return res.status(400).json({ error: 'Missing channel query (handle or ID)' });
+    return res.status(400).json({ error: 'Missing channel query' });
   }
 
+  const queries = query.split(',').map(q => q.trim()).filter(q => q.length > 0);
+  let totalProcessed = 0;
+  let totalApproved = 0;
+  let addedChannels = [];
+  let errors = [];
+
   try {
-    // 1. Resolve Channel ID
-    const channelId = await youtube.resolveChannelId(query);
-    if (!channelId) {
-      return res.status(404).json({ error: 'Channel not found' });
-    }
+    for (const q of queries) {
+      try {
+        // 1. Resolve Channel ID
+        const channelId = await youtube.resolveChannelId(q);
+        if (!channelId) {
+          errors.push(`Could not find channel for: ${q}`);
+          continue;
+        }
 
-    // 2. Check if channel already exists in global pool
-    const globalChannelRef = db.collection('channels').doc(channelId);
-    const globalChannelDoc = await globalChannelRef.get();
-    
-    // Self-healing: Check if videos actually exist
-    const existingVideos = await db.collection('videos').where('channelId', '==', channelId).limit(1).get();
-    const needsIndexing = !globalChannelDoc.exists || existingVideos.empty;
-    
-    let videosProcessed = 0;
-    let videosApproved = 0;
+        // 2. Check if channel already exists in global pool
+        const globalChannelRef = db.collection('channels').doc(channelId);
+        const globalChannelDoc = await globalChannelRef.get();
+        
+        // Self-healing: Check if videos actually exist
+        const existingVideos = await db.collection('videos').where('channelId', '==', channelId).limit(1).get();
+        const needsIndexing = !globalChannelDoc.exists || existingVideos.empty;
+        
+        let channelTitle = globalChannelDoc.exists ? globalChannelDoc.data().channelTitle : q;
 
-    if (needsIndexing) {
-      // Fetch Recent Videos from Channel
-      const videoIds = await youtube.fetchChannelVideos(channelId, 50);
+        if (needsIndexing) {
+          // Fetch Recent Videos from Channel
+          const videoIds = await youtube.fetchChannelVideos(channelId, 50);
 
-      // We use the global settings for AI content blocking (NSFW)
-      // Shorts config is now handled on the frontend via tabs, but we'll fetch them here
-      // For global indexing, we set disableShorts to false so we index everything
-      const approvedVideos = await youtube.filterAndGetVideos(videoIds, false, [], []);
-      
-      videosProcessed = videoIds.length;
-      videosApproved = approvedVideos.length;
+          const approvedVideos = await youtube.filterAndGetVideos(videoIds, false, [], []);
+          
+          totalProcessed += videoIds.length;
+          totalApproved += approvedVideos.length;
+          
+          if (approvedVideos.length > 0) {
+            channelTitle = approvedVideos[0].channelTitle;
+          }
 
-      // Save to Global Firestore Pool
-      await globalChannelRef.set({
-        channelId,
-        channelTitle: approvedVideos.length > 0 ? approvedVideos[0].channelTitle : query,
-        addedAt: new Date().toISOString()
-      }, { merge: true });
+          // Save to Global Firestore Pool
+          await globalChannelRef.set({
+            channelId,
+            channelTitle,
+            addedAt: new Date().toISOString()
+          }, { merge: true });
 
-      const batch = db.batch();
-      for (const video of approvedVideos) {
-        const videoRef = db.collection('videos').doc(video.videoId);
-        batch.set(videoRef, video);
+          const batch = db.batch();
+          for (const video of approvedVideos) {
+            const videoRef = db.collection('videos').doc(video.videoId);
+            batch.set(videoRef, video);
+          }
+          await batch.commit();
+        } else {
+           console.log(`Channel ${q} already indexed.`);
+        }
+
+        // 3. Link channel to User's Subscriptions
+        const userSubRef = db.collection('users').doc(userId).collection('subscriptions').doc(channelId);
+        await userSubRef.set({
+          channelId,
+          channelTitle,
+          addedAt: new Date().toISOString()
+        });
+
+        addedChannels.push(channelTitle);
+      } catch (err) {
+        console.error(`Error processing channel ${q}:`, err);
+        errors.push(`Failed to process: ${q}`);
       }
-      await batch.commit();
-    } else {
-       console.log('Channel already indexed in global pool and has videos.');
     }
-
-    // 3. Link channel to User's Subscriptions
-    const userSubRef = db.collection('users').doc(userId).collection('subscriptions').doc(channelId);
-    await userSubRef.set({
-      channelId,
-      channelTitle: (globalChannelDoc.exists && globalChannelDoc.data().channelTitle) ? globalChannelDoc.data().channelTitle : query,
-      addedAt: new Date().toISOString()
-    });
 
     res.status(200).json({
-      message: 'Channel added successfully',
-      channelId,
-      videosProcessed,
-      videosApproved
+      message: `Successfully added ${addedChannels.length} channels.`,
+      addedChannels,
+      videosProcessed: totalProcessed,
+      videosApproved: totalApproved,
+      errors: errors.length > 0 ? errors : undefined
     });
   } catch (error) {
-    console.error('Error adding channel:', error);
+    console.error('Error adding channels:', error);
     res.status(500).json({ error: 'Internal server error' });
   }
 });
