@@ -100,6 +100,24 @@ export default function App() {
     if (!token) return;
     
     const fetchData = async () => {
+      // 1. Try to load cached data instantly for a fast UI
+      try {
+        const cachedVids = await AsyncStorage.getItem('kidtube_cached_videos');
+        const cachedChans = await AsyncStorage.getItem('kidtube_cached_channels');
+        if (cachedVids && cachedChans) {
+          const parsedVids = JSON.parse(cachedVids);
+          setVideos(parsedVids);
+          const parsedChans = JSON.parse(cachedChans);
+          setChannels(parsedChans);
+          
+          const uniqueChannelTitles = Array.from(new Set(parsedVids.map((v: Video) => v.channelTitle))).filter(Boolean);
+          setCategories(['All', ...uniqueChannelTitles] as string[]);
+          // We don't set loading to false yet, we still want to fetch fresh data silently
+        }
+      } catch (e) {
+        console.error('Cache load error', e);
+      }
+
       setLoading(true);
       try {
         const [vidRes, chanRes, settingsRes] = await Promise.all([
@@ -118,7 +136,13 @@ export default function App() {
           const vids = await vidRes.json();
           const chans = await chanRes.json();
           setVideos(vids);
-          const uniqueChannelTitles = Array.from(new Set(vids.map((v: Video) => v.channelTitle)));
+          setChannels(chans);
+          
+          // Save to cache for next time
+          AsyncStorage.setItem('kidtube_cached_videos', JSON.stringify(vids));
+          AsyncStorage.setItem('kidtube_cached_channels', JSON.stringify(chans));
+
+          const uniqueChannelTitles = Array.from(new Set(vids.map((v: any) => v.channelTitle))).filter(Boolean);
           setCategories(['All', ...uniqueChannelTitles] as string[]);
         } else if (vidRes.status === 401) {
           handleLogout();

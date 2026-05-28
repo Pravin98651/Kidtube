@@ -67,11 +67,19 @@ export default function Home() {
 
   const fetchChannels = async (token: string) => {
     try {
+      // 1. Instantly load from cache
+      const cached = localStorage.getItem('kidtube_cached_channels');
+      if (cached) {
+        setChannels(JSON.parse(cached));
+      }
+
+      // 2. Fetch fresh from backend
       const response = await fetch('https://kidtube-almy.onrender.com/api/channels', {
         headers: { 'Authorization': `Bearer ${token}` }
       });
       const data = await response.json();
       setChannels(data);
+      localStorage.setItem('kidtube_cached_channels', JSON.stringify(data));
     } catch (error) {
       console.error('Failed to fetch channels:', error);
     }
