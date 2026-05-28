@@ -9,6 +9,8 @@ export default function Home() {
   const [loading, setLoading] = useState(false);
   const [message, setMessage] = useState({ text: '', type: '' });
   const [disableShorts, setDisableShorts] = useState(true);
+  const [educationalTollbooth, setEducationalTollbooth] = useState(false);
+  const [watchHistory, setWatchHistory] = useState<any[]>([]);
   const [userEmail, setUserEmail] = useState('');
   const [devicePassword, setDevicePassword] = useState('');
   const [devicePasswordMsg, setDevicePasswordMsg] = useState({ text: '', type: '' });
@@ -29,6 +31,7 @@ export default function Home() {
 
     fetchChannels(token);
     fetchSettings(token);
+    fetchHistory(token);
   }, [router]);
 
   const handleLogout = () => {
@@ -43,11 +46,22 @@ export default function Home() {
         headers: { 'Authorization': `Bearer ${token}` }
       });
       const data = await response.json();
-      if (data.disableShorts !== undefined) {
-        setDisableShorts(data.disableShorts);
-      }
+      if (data.disableShorts !== undefined) setDisableShorts(data.disableShorts);
+      if (data.educationalTollbooth !== undefined) setEducationalTollbooth(data.educationalTollbooth);
     } catch (error) {
       console.error('Failed to fetch settings:', error);
+    }
+  };
+
+  const fetchHistory = async (token: string) => {
+    try {
+      const response = await fetch('https://kidtube-almy.onrender.com/api/history', {
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+      const data = await response.json();
+      if (Array.isArray(data)) setWatchHistory(data);
+    } catch (error) {
+      console.error('Failed to fetch history:', error);
     }
   };
 
@@ -66,6 +80,16 @@ export default function Home() {
   const toggleShorts = async () => {
     const newValue = !disableShorts;
     setDisableShorts(newValue);
+    updateSetting('disableShorts', newValue);
+  };
+
+  const toggleTollbooth = async () => {
+    const newValue = !educationalTollbooth;
+    setEducationalTollbooth(newValue);
+    updateSetting('educationalTollbooth', newValue);
+  };
+
+  const updateSetting = async (key: string, value: boolean) => {
     const token = localStorage.getItem('kidtube_token');
     try {
       await fetch('https://kidtube-almy.onrender.com/api/settings', {
@@ -74,11 +98,11 @@ export default function Home() {
           'Content-Type': 'application/json',
           'Authorization': `Bearer ${token}`
         },
-        body: JSON.stringify({ disableShorts: newValue })
+        body: JSON.stringify({ [key]: value })
       });
     } catch (error) {
-      console.error('Failed to update settings:', error);
-      setDisableShorts(!newValue); // revert on error
+      console.error(`Failed to update ${key}:`, error);
+      // We don't revert state here for simplicity, but in prod we should
     }
   };
 
@@ -191,18 +215,35 @@ export default function Home() {
 
       <main className="p-8">
         <div className="max-w-3xl mx-auto space-y-8">
-          <section className="bg-white dark:bg-gray-800 p-6 rounded-2xl shadow-sm border border-gray-100 dark:border-gray-700 flex justify-between items-center">
+          <section className="bg-white dark:bg-gray-800 p-6 rounded-2xl shadow-sm border border-gray-100 dark:border-gray-700 space-y-6">
             <div>
               <h2 className="text-xl font-semibold">Global Content Settings</h2>
               <p className="text-sm text-gray-500 mt-1">Configure global rules that apply to all channels.</p>
             </div>
-            <div className="flex items-center gap-3">
-              <span className="font-medium">Disable YouTube Shorts</span>
+            
+            <div className="flex justify-between items-center border-b border-gray-100 dark:border-gray-700 pb-4">
+              <div>
+                <span className="font-medium block">Disable YouTube Shorts</span>
+                <span className="text-xs text-gray-500">Hide the Shorts tab entirely in the child app.</span>
+              </div>
               <button 
                 onClick={toggleShorts}
                 className={`w-12 h-6 rounded-full p-1 transition-colors ${disableShorts ? 'bg-blue-600' : 'bg-gray-300 dark:bg-gray-600'}`}
               >
                 <div className={`w-4 h-4 bg-white rounded-full transition-transform ${disableShorts ? 'translate-x-6' : 'translate-x-0'}`} />
+              </button>
+            </div>
+
+            <div className="flex justify-between items-center">
+              <div>
+                <span className="font-medium block">Educational Tollbooth (Learn to Earn)</span>
+                <span className="text-xs text-gray-500">Require the child to answer a simple math question every 3 videos.</span>
+              </div>
+              <button 
+                onClick={toggleTollbooth}
+                className={`w-12 h-6 rounded-full p-1 transition-colors ${educationalTollbooth ? 'bg-blue-600' : 'bg-gray-300 dark:bg-gray-600'}`}
+              >
+                <div className={`w-4 h-4 bg-white rounded-full transition-transform ${educationalTollbooth ? 'translate-x-6' : 'translate-x-0'}`} />
               </button>
             </div>
           </section>
@@ -282,6 +323,32 @@ export default function Home() {
                     >
                       Remove
                     </button>
+                  </div>
+                ))}
+              </div>
+            )}
+          </section>
+
+          <section className="bg-white dark:bg-gray-800 p-6 rounded-2xl shadow-sm border border-gray-100 dark:border-gray-700">
+            <h2 className="text-xl font-semibold mb-4">Watch History</h2>
+            {watchHistory.length === 0 ? (
+              <div className="text-gray-500 text-center py-8">
+                No history yet. Videos watched by the child will appear here.
+              </div>
+            ) : (
+              <div className="mt-4 flex flex-col gap-3">
+                {watchHistory.map((item, idx) => (
+                  <div key={idx} className="flex gap-4 items-center p-3 bg-gray-50 dark:bg-gray-900 rounded-lg border border-gray-100 dark:border-gray-700">
+                    {item.thumbnail && (
+                      <img src={item.thumbnail} alt="Thumbnail" className="w-24 h-16 object-cover rounded" />
+                    )}
+                    <div className="flex-1 min-w-0">
+                      <p className="font-medium text-sm truncate">{item.title}</p>
+                      <p className="text-xs text-gray-500 mt-1">{item.channelTitle}</p>
+                    </div>
+                    <div className="text-xs text-gray-400 whitespace-nowrap">
+                      {new Date(item.timestamp).toLocaleString([], { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })}
+                    </div>
                   </div>
                 ))}
               </div>

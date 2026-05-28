@@ -242,6 +242,46 @@ app.delete('/api/channels/:id', authenticate, async (req, res) => {
   }
 });
 
+// Endpoint: Log Watch History
+app.post('/api/history', authenticate, async (req, res) => {
+  const { videoId, title, channelTitle, thumbnail } = req.body;
+  if (!videoId) return res.status(400).json({ error: 'Missing videoId' });
+  try {
+    const historyEntry = {
+      videoId,
+      title: title || 'Unknown Video',
+      channelTitle: channelTitle || 'Unknown Channel',
+      thumbnail: thumbnail || '',
+      timestamp: new Date().toISOString()
+    };
+    
+    const userRef = db.collection('users').doc(req.user.uid).collection('settings').doc('history');
+    const doc = await userRef.get();
+    let history = doc.exists && doc.data().videos ? doc.data().videos : [];
+    
+    // Add to beginning of array and slice to keep only latest 50
+    history.unshift(historyEntry);
+    if (history.length > 50) history = history.slice(0, 50);
+
+    await userRef.set({ videos: history }, { merge: true });
+    res.status(200).json({ success: true });
+  } catch (error) {
+    console.error('Error logging history:', error);
+    res.status(500).json({ error: 'Failed to log history' });
+  }
+});
+
+// Endpoint: Get Watch History
+app.get('/api/history', authenticate, async (req, res) => {
+  try {
+    const doc = await db.collection('users').doc(req.user.uid).collection('settings').doc('history').get();
+    res.status(200).json(doc.exists ? (doc.data().videos || []) : []);
+  } catch (error) {
+    console.error('Error fetching history:', error);
+    res.status(500).json({ error: 'Failed to fetch history' });
+  }
+});
+
 // Endpoint: Get settings
 app.get('/api/settings', authenticate, async (req, res) => {
   try {

@@ -2,6 +2,7 @@ import { StatusBar } from 'expo-status-bar';
 import { StyleSheet, Text, View, SafeAreaView, TouchableOpacity, Image, Platform, ActivityIndicator, FlatList, Dimensions, TextInput, KeyboardAvoidingView, ScrollView } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import SafeVideoPlayer from './components/SafeVideoPlayer';
+import MathTollbooth from './components/MathTollbooth';
 import { useState, useEffect, memo, useCallback } from 'react';
 
 const { height: SCREEN_HEIGHT, width: SCREEN_WIDTH } = Dimensions.get('window');
@@ -68,6 +69,10 @@ export default function App() {
   const [password, setPassword] = useState('');
   const [loginError, setLoginError] = useState('');
   const [isLoggingIn, setIsLoggingIn] = useState(false);
+  const [disableShorts, setDisableShorts] = useState(false);
+  const [educationalTollbooth, setEducationalTollbooth] = useState(false);
+  const [videosWatchedCount, setVideosWatchedCount] = useState(0);
+  const [showTollbooth, setShowTollbooth] = useState(false);
 
   const [activeVideo, setActiveVideo] = useState<string | null>(null);
   const [selectedCategory, setSelectedCategory] = useState<string>('All');
@@ -97,10 +102,17 @@ export default function App() {
     const fetchData = async () => {
       setLoading(true);
       try {
-        const [vidRes, chanRes] = await Promise.all([
+        const [vidRes, chanRes, settingsRes] = await Promise.all([
           fetch(`${baseUrl}/api/videos`, { headers: { 'Authorization': `Bearer ${token}` } }),
-          fetch(`${baseUrl}/api/channels`, { headers: { 'Authorization': `Bearer ${token}` } })
+          fetch(`${baseUrl}/api/channels`, { headers: { 'Authorization': `Bearer ${token}` } }),
+          fetch(`${baseUrl}/api/settings`, { headers: { 'Authorization': `Bearer ${token}` } })
         ]);
+
+        if (settingsRes.ok) {
+          const settings = await settingsRes.json();
+          if (settings.disableShorts !== undefined) setDisableShorts(settings.disableShorts);
+          if (settings.educationalTollbooth !== undefined) setEducationalTollbooth(settings.educationalTollbooth);
+        }
 
         if (vidRes.ok && chanRes.ok) {
           const vids = await vidRes.json();
@@ -139,6 +151,41 @@ export default function App() {
       setLoginError(err.message);
     } finally {
       setIsLoggingIn(false);
+    }
+  };
+
+  const logHistory = async (video: Video) => {
+    try {
+      await fetch(`${baseUrl}/api/history`, {
+        method: 'POST',
+        headers: { 
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify({
+          videoId: video.videoId,
+          title: video.title,
+          channelTitle: video.channelTitle,
+          thumbnail: getThumbnailUrl(video)
+        })
+      });
+    } catch (e) {
+      console.error('Failed to log history:', e);
+    }
+  };
+
+  const handleVideoSelect = (video: Video) => {
+    setActiveVideo(video.videoId);
+    logHistory(video);
+    
+    // Educational Tollbooth Logic
+    if (educationalTollbooth) {
+      const newCount = videosWatchedCount + 1;
+      setVideosWatchedCount(newCount);
+      // Show tollbooth on the 3rd video (count reaches 3)
+      if (newCount >= 3) {
+        setShowTollbooth(true);
+      }
     }
   };
 
@@ -182,7 +229,7 @@ export default function App() {
   }
 
   // Filter Logic
-  const shortsVideos = videos.filter(v => v.duration && v.duration <= 61);
+  const shortsVideos = disableShorts ? [] : videos.filter(v => v.duration && v.duration <= 61);
   const regularVideos = videos.filter(v => !v.duration || v.duration > 61);
   
   const filteredHomeVideos = selectedCategory === 'All' 
@@ -357,7 +404,7 @@ export default function App() {
             ListHeaderComponent={ListHeader}
             showsVerticalScrollIndicator={false}
             renderItem={({ item }) => (
-              <VideoCard video={item} onPress={() => setActiveVideo(item.videoId)} />
+              <VideoCard video={item} onPress={() => handleVideoSelect(item)} />
             )}
             ListEmptyComponent={
               loading ? <ActivityIndicator size="large" color="#FF0000" style={{ marginTop: 40 }} />
@@ -391,6 +438,16 @@ export default function App() {
           <Text style={[styles.navLabel, currentTab === 'Shorts' && { color: '#FFF' }]}>Library</Text>
         </View>
       </View>
+
+      {/* Educational Tollbooth Overlay */}
+      {showTollbooth && (
+        <MathTollbooth 
+          onSuccess={() => {
+            setShowTollbooth(false);
+            setVideosWatchedCount(0);
+          }} 
+        />
+      )}
     </SafeAreaView>
   );
 }
