@@ -69,15 +69,21 @@ export default function App() {
   const [password, setPassword] = useState('');
   const [loginError, setLoginError] = useState('');
   const [isLoggingIn, setIsLoggingIn] = useState(false);
+  
+  // Settings & Gamification
   const [disableShorts, setDisableShorts] = useState(false);
   const [educationalTollbooth, setEducationalTollbooth] = useState(false);
   const [videosWatchedCount, setVideosWatchedCount] = useState(0);
   const [showTollbooth, setShowTollbooth] = useState(false);
+  
+  // Child Profiles State
+  const [children, setChildren] = useState<any[]>([]);
+  const [selectedChild, setSelectedChild] = useState<any | null>(null);
+  const [timeSpentToday, setTimeSpentToday] = useState(0);
 
   const [activeVideo, setActiveVideo] = useState<string | null>(null);
   const [selectedCategory, setSelectedCategory] = useState<string>('All');
   const [currentTab, setCurrentTab] = useState<'Home' | 'Shorts'>('Home');
-  // Track which short is currently playing
   const [playingShortId, setPlayingShortId] = useState<string | null>(null);
   
   const [videos, setVideos] = useState<Video[]>([]);
@@ -86,75 +92,102 @@ export default function App() {
 
   const baseUrl = 'https://kidtube-almy.onrender.com';
 
+  // INITIAL LOAD
   useEffect(() => {
     const checkToken = async () => {
       const storedToken = await AsyncStorage.getItem('kidtube_token');
-      if (storedToken) {
-        setToken(storedToken);
-      }
+      if (storedToken) setToken(storedToken);
     };
     checkToken();
   }, []);
 
+  // FETCH GLOBAL SETTINGS & CHILDREN
   useEffect(() => {
     if (!token) return;
-    
-    const fetchData = async () => {
-      // 1. Try to load cached data instantly for a fast UI
+    const fetchInitialData = async () => {
       try {
-        const cachedVids = await AsyncStorage.getItem('kidtube_cached_videos');
-        const cachedChans = await AsyncStorage.getItem('kidtube_cached_channels');
-        if (cachedVids && cachedChans) {
-          const parsedVids = JSON.parse(cachedVids);
-          setVideos(parsedVids);
-          const parsedChans = JSON.parse(cachedChans);
-          setChannels(parsedChans);
-          
-          const uniqueChannelTitles = Array.from(new Set(parsedVids.map((v: Video) => v.channelTitle))).filter(Boolean);
-          setCategories(['All', ...uniqueChannelTitles] as string[]);
-          // We don't set loading to false yet, we still want to fetch fresh data silently
-        }
-      } catch (e) {
-        console.error('Cache load error', e);
-      }
-
-      setLoading(true);
-      try {
-        const [vidRes, chanRes, settingsRes] = await Promise.all([
-          fetch(`${baseUrl}/api/videos`, { headers: { 'Authorization': `Bearer ${token}` } }),
-          fetch(`${baseUrl}/api/channels`, { headers: { 'Authorization': `Bearer ${token}` } }),
-          fetch(`${baseUrl}/api/settings`, { headers: { 'Authorization': `Bearer ${token}` } })
+        const [settingsRes, childrenRes] = await Promise.all([
+          fetch(`${baseUrl}/api/settings`, { headers: { 'Authorization': `Bearer ${token}` } }),
+          fetch(`${baseUrl}/api/children`, { headers: { 'Authorization': `Bearer ${token}` } })
         ]);
-
         if (settingsRes.ok) {
           const settings = await settingsRes.json();
           if (settings.disableShorts !== undefined) setDisableShorts(settings.disableShorts);
           if (settings.educationalTollbooth !== undefined) setEducationalTollbooth(settings.educationalTollbooth);
         }
+        if (childrenRes.ok) {
+          const childrenData = await childrenRes.json();
+          setChildren(childrenData);
+        } else if (childrenRes.status === 401) handleLogout();
+      } catch (e) { console.error(e); }
+    };
+    fetchInitialData();
+  }, [token]);
 
-        if (vidRes.ok && chanRes.ok) {
+  // FETCH CHILD-SPECIFIC DATA & SCREEN TIME INIT
+  useEffect(() => {
+    if (!token || !selectedChild) return;
+    
+    const fetchVideos = async () => {
+      try {
+        const cachedVids = await AsyncStorage.getItem(`kidtube_cached_videos_${selectedChild.id}`);
+        if (cachedVids) {
+          const parsedVids = JSON.parse(cachedVids);
+          setVideos(parsedVids);
+          const uniqueChannelTitles = Array.from(new Set(parsedVids.map((v: Video) => v.channelTitle))).filter(Boolean);
+          setCategories(['All', ...uniqueChannelTitles] as string[]);
+        }
+      } catch (e) {}
+
+      setLoading(true);
+      try {
+        const vidRes = await fetch(`${baseUrl}/api/videos?childId=${selectedChild.id}`, { headers: { 'Authorization': `Bearer ${token}` } });
+        if (vidRes.ok) {
           const vids = await vidRes.json();
-          const chans = await chanRes.json();
           setVideos(vids);
-          setChannels(chans);
-          
-          // Save to cache for next time
-          AsyncStorage.setItem('kidtube_cached_videos', JSON.stringify(vids));
-          AsyncStorage.setItem('kidtube_cached_channels', JSON.stringify(chans));
-
+          AsyncStorage.setItem(`kidtube_cached_videos_${selectedChild.id}`, JSON.stringify(vids));
           const uniqueChannelTitles = Array.from(new Set(vids.map((v: any) => v.channelTitle))).filter(Boolean);
           setCategories(['All', ...uniqueChannelTitles] as string[]);
-        } else if (vidRes.status === 401) {
-          handleLogout();
         }
-      } catch (e) {
-        console.error('Failed to fetch data:', e);
-      } finally {
-        setLoading(false);
-      }
+      } catch (e) {}
+      setLoading(false);
     };
-    fetchData();
-  }, [token]);
+
+    fetchVideos();
+
+    // Initialize screen time tracking
+    const today = new Date().toISOString().split('T')[0];
+    const timeKey = `timeSpent_${selectedChild.id}_${today}`;
+    AsyncStorage.getItem(timeKey).then(val => {
+      if (val) setTimeSpentToday(parseInt(val));
+      else setTimeSpentToday(0);
+    });
+  }, [token, selectedChild]);
+
+  // SCREEN TIME TRACKING LOOP
+  useEffect(() => {
+    if (!selectedChild) return;
+    const interval = setInterval(() => {
+      setTimeSpentToday(prev => {
+        const next = prev + 1;
+        const today = new Date().toISOString().split('T')[0];
+        AsyncStorage.setItem(`timeSpent_${selectedChild.id}_${today}`, next.toString());
+        return next;
+      });
+    }, 60000); // 1 minute
+    return () => clearInterval(interval);
+  }, [selectedChild]);
+
+  const isLocked = () => {
+    if (!selectedChild) return false;
+    if (selectedChild.dailyLimitMins > 0 && timeSpentToday >= selectedChild.dailyLimitMins) return true;
+    if (selectedChild.bedtime) {
+      const now = new Date();
+      const currentStr = now.toTimeString().substring(0, 5); // HH:MM
+      if (currentStr >= selectedChild.bedtime) return true;
+    }
+    return false;
+  };
 
   const handleLogin = async () => {
     if (!email || !password) return;
@@ -168,54 +201,52 @@ export default function App() {
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error);
-      
       await AsyncStorage.setItem('kidtube_token', data.token);
       setToken(data.token);
-    } catch (err: any) {
-      setLoginError(err.message);
-    } finally {
-      setIsLoggingIn(false);
-    }
+    } catch (err: any) { setLoginError(err.message); } 
+    finally { setIsLoggingIn(false); }
   };
 
   const logHistory = async (video: Video) => {
+    if (!selectedChild) return;
     try {
       await fetch(`${baseUrl}/api/history`, {
         method: 'POST',
-        headers: { 
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${token}`
-        },
-        body: JSON.stringify({
-          videoId: video.videoId,
-          title: video.title,
-          channelTitle: video.channelTitle,
-          thumbnail: getThumbnailUrl(video)
-        })
+        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
+        body: JSON.stringify({ childId: selectedChild.id, videoId: video.videoId, title: video.title, channelTitle: video.channelTitle, thumbnail: getThumbnailUrl(video) })
       });
-    } catch (e) {
-      console.error('Failed to log history:', e);
-    }
+    } catch (e) { console.error('Failed to log history:', e); }
   };
 
   const handleVideoSelect = (video: Video) => {
     setActiveVideo(video.videoId);
     logHistory(video);
-    
-    // Educational Tollbooth Logic
     if (educationalTollbooth) {
       const newCount = videosWatchedCount + 1;
       setVideosWatchedCount(newCount);
-      // Show tollbooth on the 3rd video (count reaches 3)
-      if (newCount >= 3) {
-        setShowTollbooth(true);
-      }
+      if (newCount >= 3) setShowTollbooth(true);
     }
+  };
+
+  const handleTollboothSuccess = async () => {
+    setShowTollbooth(false);
+    setVideosWatchedCount(0);
+    // Add Stars!
+    if (!selectedChild) return;
+    setSelectedChild({ ...selectedChild, stars: (selectedChild.stars || 0) + 10 });
+    try {
+      await fetch(`${baseUrl}/api/stars`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
+        body: JSON.stringify({ childId: selectedChild.id, starsToAdd: 10 })
+      });
+    } catch (e) {}
   };
 
   const handleLogout = async () => {
     await AsyncStorage.removeItem('kidtube_token');
     setToken(null);
+    setSelectedChild(null);
   };
 
   if (!token) {
@@ -227,23 +258,9 @@ export default function App() {
             <Text style={styles.headerTitle}>KidTube Login</Text>
           </View>
           <Text style={styles.loginSubtitle}>Parent authentication required</Text>
-          
           {loginError ? <Text style={styles.errorText}>{loginError}</Text> : null}
-          
-          <TextInput
-            style={styles.input}
-            placeholder="Parent Email"
-            value={email}
-            onChangeText={setEmail}
-            autoCapitalize="none"
-          />
-          <TextInput
-            style={styles.input}
-            placeholder="Device Password (Set in Dashboard)"
-            value={password}
-            onChangeText={setPassword}
-            secureTextEntry
-          />
+          <TextInput style={styles.input} placeholder="Parent Email" value={email} onChangeText={setEmail} autoCapitalize="none" />
+          <TextInput style={styles.input} placeholder="Device Password" value={password} onChangeText={setPassword} secureTextEntry />
           <TouchableOpacity style={styles.loginBtn} onPress={handleLogin} disabled={isLoggingIn}>
             <Text style={styles.loginBtnText}>{isLoggingIn ? 'Logging in...' : 'Link Device'}</Text>
           </TouchableOpacity>
@@ -252,20 +269,51 @@ export default function App() {
     );
   }
 
-  // Filter Logic
+  // PROFILE SELECTOR SCREEN
+  if (!selectedChild) {
+    return (
+      <SafeAreaView style={styles.profileContainer}>
+        <View style={styles.profileHeader}>
+          <Text style={styles.profileTitle}>Who's Watching?</Text>
+          <TouchableOpacity onPress={handleLogout}><Text style={styles.logoutText}>Logout</Text></TouchableOpacity>
+        </View>
+        {children.length === 0 ? (
+          <Text style={styles.emptyText}>No profiles found. Create one in the Parent Dashboard!</Text>
+        ) : (
+          <View style={styles.profilesGrid}>
+            {children.map(child => (
+              <TouchableOpacity key={child.id} style={styles.profileCard} onPress={() => setSelectedChild(child)}>
+                <View style={styles.profileAvatar}><Text style={styles.profileAvatarText}>👦</Text></View>
+                <Text style={styles.profileName}>{child.name}</Text>
+              </TouchableOpacity>
+            ))}
+          </View>
+        )}
+      </SafeAreaView>
+    );
+  }
+
+  // SLEEP MODE LOCK SCREEN
+  if (isLocked()) {
+    return (
+      <View style={styles.sleepContainer}>
+        <Text style={styles.sleepIcon}>😴</Text>
+        <Text style={styles.sleepTitle}>Time to Rest!</Text>
+        <Text style={styles.sleepSubtitle}>You've reached your screen time limit or it's past bedtime.</Text>
+        <TouchableOpacity style={styles.switchProfileBtn} onPress={() => setSelectedChild(null)}>
+          <Text style={styles.switchProfileText}>Switch Profile</Text>
+        </TouchableOpacity>
+      </View>
+    );
+  }
+
   const shortsVideos = disableShorts ? [] : videos.filter(v => v.duration && v.duration <= 61);
   const regularVideos = videos.filter(v => !v.duration || v.duration > 61);
-  
-  const filteredHomeVideos = selectedCategory === 'All' 
-    ? regularVideos 
-    : regularVideos.filter(v => v.channelTitle === selectedCategory);
+  const filteredHomeVideos = selectedCategory === 'All' ? regularVideos : regularVideos.filter(v => v.channelTitle === selectedCategory);
 
-  // Auto-play first short when switching to Shorts tab
   const handleShortsTab = () => {
     setCurrentTab('Shorts');
-    if (shortsVideos.length > 0 && !playingShortId) {
-      setPlayingShortId(shortsVideos[0].videoId);
-    }
+    if (shortsVideos.length > 0 && !playingShortId) setPlayingShortId(shortsVideos[0].videoId);
   };
 
   const ListHeader = () => (
@@ -276,7 +324,10 @@ export default function App() {
           <Text style={styles.headerTitle}>YouTube</Text>
         </View>
         <View style={styles.headerIcons}>
-          <TouchableOpacity onPress={handleLogout}><Text style={{fontSize: 24}}>🚪</Text></TouchableOpacity>
+          <View style={styles.starBadge}>
+            <Text style={styles.starBadgeText}>⭐ {selectedChild.stars || 0}</Text>
+          </View>
+          <TouchableOpacity onPress={() => setSelectedChild(null)}><Text style={{fontSize: 24}}>👦</Text></TouchableOpacity>
         </View>
       </View>
       <View style={styles.categoriesWrapper}>
@@ -286,10 +337,7 @@ export default function App() {
           data={categories}
           keyExtractor={(item) => item}
           renderItem={({ item }) => (
-            <TouchableOpacity 
-              style={[styles.categoryPill, selectedCategory === item && styles.categoryPillActive]}
-              onPress={() => setSelectedCategory(item)}
-            >
+            <TouchableOpacity style={[styles.categoryPill, selectedCategory === item && styles.categoryPillActive]} onPress={() => setSelectedCategory(item)}>
               <Text style={[styles.categoryText, selectedCategory === item && styles.categoryTextActive]}>{item}</Text>
             </TouchableOpacity>
           )}
@@ -299,7 +347,6 @@ export default function App() {
     </View>
   );
 
-  // ===== SHORTS TAB =====
   const renderShortsTab = () => {
     if (shortsVideos.length === 0) {
       return (
@@ -311,10 +358,7 @@ export default function App() {
           <View style={styles.shortsEmptyContainer}>
             <Text style={styles.shortsEmptyIcon}>⚡</Text>
             <Text style={styles.shortsEmptyTitle}>No Shorts yet</Text>
-            <Text style={styles.shortsEmptySubtitle}>
-              Shorts from your approved channels will appear here.{'\n'}
-              Make sure "Disable Shorts" is turned off in the Parent Dashboard.
-            </Text>
+            <Text style={styles.shortsEmptySubtitle}>Shorts from your approved channels will appear here.</Text>
           </View>
         </View>
       );
@@ -322,13 +366,10 @@ export default function App() {
 
     return (
       <View style={styles.shortsContainer}>
-        {/* Shorts Header */}
         <View style={styles.shortsHeader}>
           <View style={styles.youtubeIcon}><View style={styles.playTriangle} /></View>
           <Text style={styles.shortsHeaderTitle}>Shorts</Text>
         </View>
-
-        {/* Vertical scrolling shorts feed */}
         <ScrollView
           pagingEnabled
           showsVerticalScrollIndicator={false}
@@ -338,64 +379,27 @@ export default function App() {
           onMomentumScrollEnd={(e) => {
             const index = Math.round(e.nativeEvent.contentOffset.y / (SCREEN_HEIGHT - 190));
             const safeIndex = Math.min(index, shortsVideos.length - 1);
-            if (safeIndex >= 0 && shortsVideos[safeIndex]) {
-              setPlayingShortId(shortsVideos[safeIndex].videoId);
-            }
+            if (safeIndex >= 0 && shortsVideos[safeIndex]) setPlayingShortId(shortsVideos[safeIndex].videoId);
           }}
         >
           {shortsVideos.map((video) => (
             <View key={video.videoId} style={styles.shortCard}>
-              {/* Background thumbnail (always visible behind player) */}
-              <Image 
-                source={{ uri: getThumbnailUrl(video) }} 
-                style={StyleSheet.absoluteFill} 
-                resizeMode="cover"
-                blurRadius={3}
-              />
+              <Image source={{ uri: getThumbnailUrl(video) }} style={StyleSheet.absoluteFill} resizeMode="cover" blurRadius={3} />
               <View style={[StyleSheet.absoluteFill, { backgroundColor: 'rgba(0,0,0,0.4)' }]} />
-
-              {/* Video Player (only for the active short) */}
               {playingShortId === video.videoId ? (
                 <View style={styles.shortPlayerWrapper}>
                   <SafeVideoPlayer videoId={video.videoId} vertical={true} />
                 </View>
               ) : (
-                <TouchableOpacity 
-                  style={styles.shortPlayButton}
-                  onPress={() => setPlayingShortId(video.videoId)}
-                  activeOpacity={0.8}
-                >
-                  <View style={styles.shortPlayIcon}>
-                    <View style={styles.shortPlayTriangle} />
-                  </View>
+                <TouchableOpacity style={styles.shortPlayButton} onPress={() => setPlayingShortId(video.videoId)} activeOpacity={0.8}>
+                  <View style={styles.shortPlayIcon}><View style={styles.shortPlayTriangle} /></View>
                 </TouchableOpacity>
               )}
-
-              {/* Video info overlay */}
               <View style={styles.shortOverlay}>
                 <Text style={styles.shortTitle} numberOfLines={2}>{video.title}</Text>
                 <View style={styles.shortChannelRow}>
-                  <Image 
-                    source={{ uri: `https://ui-avatars.com/api/?name=${encodeURIComponent(video.channelTitle)}&background=random&color=fff&rounded=true&size=32` }} 
-                    style={styles.shortChannelAvatar} 
-                  />
+                  <Image source={{ uri: `https://ui-avatars.com/api/?name=${encodeURIComponent(video.channelTitle)}&background=random&color=fff&rounded=true&size=32` }} style={styles.shortChannelAvatar} />
                   <Text style={styles.shortSubtitle}>{video.channelTitle}</Text>
-                </View>
-              </View>
-
-              {/* Right side actions */}
-              <View style={styles.shortActions}>
-                <View style={styles.shortActionItem}>
-                  <Text style={styles.shortActionIcon}>👍</Text>
-                  <Text style={styles.shortActionLabel}>Like</Text>
-                </View>
-                <View style={styles.shortActionItem}>
-                  <Text style={styles.shortActionIcon}>👎</Text>
-                  <Text style={styles.shortActionLabel}>Dislike</Text>
-                </View>
-                <View style={styles.shortActionItem}>
-                  <Text style={styles.shortActionIcon}>💬</Text>
-                  <Text style={styles.shortActionLabel}>Chat</Text>
                 </View>
               </View>
             </View>
@@ -408,7 +412,6 @@ export default function App() {
   return (
     <SafeAreaView style={styles.container}>
       <StatusBar style={currentTab === 'Shorts' ? 'light' : 'dark'} />
-      
       {currentTab === 'Home' ? (
         <View style={{ flex: 1 }}>
           {activeVideo && (
@@ -427,20 +430,15 @@ export default function App() {
             keyExtractor={(item) => item.videoId}
             ListHeaderComponent={ListHeader}
             showsVerticalScrollIndicator={false}
-            renderItem={({ item }) => (
-              <VideoCard video={item} onPress={() => handleVideoSelect(item)} />
-            )}
+            renderItem={({ item }) => <VideoCard video={item} onPress={() => handleVideoSelect(item)} />}
             ListEmptyComponent={
               loading ? <ActivityIndicator size="large" color="#FF0000" style={{ marginTop: 40 }} />
               : <Text style={styles.emptyText}>No videos available. Ask your parent to approve a channel!</Text>
             }
           />
         </View>
-      ) : (
-        renderShortsTab()
-      )}
+      ) : renderShortsTab()}
 
-      {/* Bottom Nav */}
       <View style={[styles.bottomNav, currentTab === 'Shorts' && styles.bottomNavDark]}>
         <TouchableOpacity style={styles.navItem} onPress={() => { setCurrentTab('Home'); setPlayingShortId(null); }}>
           <Text style={[styles.navIcon, currentTab === 'Home' && styles.navActive]}>🏠</Text>
@@ -463,15 +461,7 @@ export default function App() {
         </View>
       </View>
 
-      {/* Educational Tollbooth Overlay */}
-      {showTollbooth && (
-        <MathTollbooth 
-          onSuccess={() => {
-            setShowTollbooth(false);
-            setVideosWatchedCount(0);
-          }} 
-        />
-      )}
+      {showTollbooth && <MathTollbooth onSuccess={handleTollboothSuccess} />}
     </SafeAreaView>
   );
 }
@@ -485,6 +475,26 @@ const styles = StyleSheet.create({
   input: { backgroundColor: '#F3F4F6', borderRadius: 8, padding: 14, marginBottom: 16, fontSize: 16 },
   loginBtn: { backgroundColor: '#EF4444', padding: 14, borderRadius: 8, alignItems: 'center', marginTop: 8 },
   loginBtnText: { color: '#FFF', fontWeight: 'bold', fontSize: 16 },
+  
+  // Profile Selector
+  profileContainer: { flex: 1, backgroundColor: '#0F0F0F', paddingTop: Platform.OS === 'android' ? 40 : 20 },
+  profileHeader: { flexDirection: 'row', justifyContent: 'space-between', padding: 20, alignItems: 'center' },
+  profileTitle: { fontSize: 24, fontWeight: '700', color: '#FFF' },
+  logoutText: { color: '#AAAAAA', fontSize: 16 },
+  profilesGrid: { flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'center', gap: 20, marginTop: 40 },
+  profileCard: { alignItems: 'center', margin: 10 },
+  profileAvatar: { width: 100, height: 100, borderRadius: 16, backgroundColor: '#272727', justifyContent: 'center', alignItems: 'center', marginBottom: 12 },
+  profileAvatarText: { fontSize: 48 },
+  profileName: { color: '#FFF', fontSize: 16, fontWeight: '500' },
+  
+  // Sleep Mode
+  sleepContainer: { flex: 1, backgroundColor: '#111827', justifyContent: 'center', alignItems: 'center', padding: 20 },
+  sleepIcon: { fontSize: 80, marginBottom: 20 },
+  sleepTitle: { fontSize: 32, fontWeight: 'bold', color: '#F3F4F6', marginBottom: 10 },
+  sleepSubtitle: { fontSize: 16, color: '#9CA3AF', textAlign: 'center', marginBottom: 40, paddingHorizontal: 20 },
+  switchProfileBtn: { backgroundColor: '#374151', paddingHorizontal: 24, paddingVertical: 12, borderRadius: 30 },
+  switchProfileText: { color: '#FFF', fontSize: 16, fontWeight: '600' },
+
   headerSection: { backgroundColor: '#FFF' },
   header: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingHorizontal: 12, paddingVertical: 10 },
   logoContainer: { flexDirection: 'row', alignItems: 'center' },
@@ -492,6 +502,8 @@ const styles = StyleSheet.create({
   playTriangle: { width: 0, height: 0, backgroundColor: 'transparent', borderStyle: 'solid', borderLeftWidth: 6, borderBottomWidth: 4, borderTopWidth: 4, borderLeftColor: '#FFFFFF', borderRightColor: 'transparent', borderBottomColor: 'transparent', borderTopColor: 'transparent', marginLeft: 2 },
   headerTitle: { fontSize: 20, fontWeight: '700', color: '#0F0F0F', letterSpacing: -0.8 },
   headerIcons: { flexDirection: 'row', alignItems: 'center', gap: 16 },
+  starBadge: { backgroundColor: '#FEF3C7', paddingHorizontal: 10, paddingVertical: 4, borderRadius: 12 },
+  starBadgeText: { color: '#D97706', fontWeight: 'bold', fontSize: 14 },
   categoriesWrapper: { paddingVertical: 8, borderBottomWidth: 1, borderBottomColor: '#E5E5E5' },
   categoriesContainer: { paddingHorizontal: 12, gap: 8 },
   categoryPill: { backgroundColor: '#F2F2F2', paddingHorizontal: 12, paddingVertical: 6, borderRadius: 8 },
@@ -516,7 +528,6 @@ const styles = StyleSheet.create({
   dot: { width: 3, height: 3, borderRadius: 1.5, backgroundColor: '#0F0F0F' },
   emptyText: { padding: 40, textAlign: 'center', color: '#606060' },
   
-  // Shorts Styles
   shortsContainer: { flex: 1, backgroundColor: '#0F0F0F' },
   shortsHeader: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 14, paddingVertical: 10, backgroundColor: '#0F0F0F' },
   shortsHeaderTitle: { fontSize: 20, fontWeight: '700', color: '#FFFFFF', letterSpacing: -0.5 },
@@ -534,11 +545,6 @@ const styles = StyleSheet.create({
   shortChannelRow: { flexDirection: 'row', alignItems: 'center' },
   shortChannelAvatar: { width: 28, height: 28, borderRadius: 14, marginRight: 8, borderWidth: 1, borderColor: 'rgba(255,255,255,0.3)' },
   shortSubtitle: { color: '#FFF', fontSize: 13, fontWeight: '500' },
-  shortActions: { position: 'absolute', right: 10, bottom: 80, alignItems: 'center', gap: 20 },
-  shortActionItem: { alignItems: 'center' },
-  shortActionIcon: { fontSize: 24, marginBottom: 2 },
-  shortActionLabel: { color: '#FFF', fontSize: 10, fontWeight: '500' },
-
   bottomNav: { flexDirection: 'row', justifyContent: 'space-around', alignItems: 'center', paddingVertical: 8, paddingBottom: Platform.OS === 'ios' ? 24 : 30, backgroundColor: '#FFFFFF', borderTopWidth: 1, borderTopColor: '#E5E5E5' },
   bottomNavDark: { backgroundColor: '#0F0F0F', borderTopColor: '#272727' },
   navItem: { alignItems: 'center' },
