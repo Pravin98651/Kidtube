@@ -80,21 +80,27 @@ export default function Home() {
     try {
       const res = await fetch('https://kidtube-almy.onrender.com/api/children', { headers: { 'Authorization': `Bearer ${tk}` } });
       const data = await res.json();
-      setChildren(data);
+      if (res.ok) setChildren(data);
     } catch (e) { console.error('Error fetching children', e); }
   };
 
   const fetchChannels = async (tk: string, childId: string) => {
+    if (!childId) return;
     try {
       const res = await fetch(`https://kidtube-almy.onrender.com/api/channels?childId=${childId}`, { headers: { 'Authorization': `Bearer ${tk}` } });
-      setChannels(await res.json());
+      const data = await res.json();
+      if (res.ok) setChannels(data);
+      else setChannels([]);
     } catch (e) { console.error('Error fetching channels', e); }
   };
 
   const fetchHistory = async (tk: string, childId: string) => {
+    if (!childId) return;
     try {
       const res = await fetch(`https://kidtube-almy.onrender.com/api/history?childId=${childId}`, { headers: { 'Authorization': `Bearer ${tk}` } });
-      setWatchHistory(await res.json());
+      const data = await res.json();
+      if (res.ok) setWatchHistory(data);
+      else setWatchHistory([]);
     } catch (e) { console.error('Error fetching history', e); }
   };
 
@@ -104,8 +110,12 @@ export default function Home() {
     try {
       const res = await fetch(`https://kidtube-almy.onrender.com/api/videos?childId=${selectedChild.id}&includeHidden=true`, { headers: { 'Authorization': `Bearer ${token}` } });
       const data = await res.json();
-      const filtered = data.filter((v: any) => v.channelId === channelId);
-      setChannelVideos(filtered);
+      if (res.ok) {
+        const filtered = data.filter((v: any) => v.channelId === channelId);
+        setChannelVideos(filtered);
+      } else {
+        setChannelVideos([]);
+      }
     } catch (e) { console.error('Error fetching videos', e); }
     setLoadingVideos(false);
   };
