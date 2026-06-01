@@ -240,7 +240,7 @@ export default function Home() {
 
         <main className="p-8 max-w-4xl mx-auto space-y-8">
           <section className="bg-white dark:bg-gray-800 p-6 rounded-2xl shadow-sm border border-gray-100 dark:border-gray-700">
-            <h2 className="text-2xl font-semibold mb-6">Who's Watching?</h2>
+            <h2 className="text-2xl font-semibold mb-6">Who&apos;s Watching?</h2>
             
             <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-8">
               {children.map(child => (
@@ -261,7 +261,7 @@ export default function Home() {
             </div>
 
             <form onSubmit={handleCreateChild} className="flex gap-4 max-w-md">
-              <input type="text" value={newChildName} onChange={e => setNewChildName(e.target.value)} placeholder="New Child's Name" className="flex-1 px-4 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 dark:bg-gray-900 dark:border-gray-700" />
+              <input type="text" value={newChildName} onChange={e => setNewChildName(e.target.value)} placeholder="New Child&apos;s Name" className="flex-1 px-4 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 dark:bg-gray-900 dark:border-gray-700" />
               <button type="submit" disabled={loadingChild || !newChildName} className="px-6 py-2 bg-blue-600 hover:bg-blue-700 text-white font-medium rounded-lg disabled:opacity-50">Add Profile</button>
             </form>
           </section>
@@ -309,7 +309,7 @@ export default function Home() {
       <header className="bg-white dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700 p-4 flex justify-between items-center sticky top-0 z-10">
         <div className="flex items-center gap-4">
           <button onClick={() => setSelectedChild(null)} className="text-blue-600 font-medium hover:underline">← Back to Profiles</button>
-          <h1 className="text-2xl font-bold text-gray-800 dark:text-gray-100">{selectedChild.name}'s Dashboard</h1>
+          <h1 className="text-2xl font-bold text-gray-800 dark:text-gray-100">{selectedChild.name}&apos;s Dashboard</h1>
         </div>
         <div className="text-xl font-bold text-yellow-500 flex items-center gap-2">
           <span>⭐</span> {selectedChild.stars || 0} Stars
@@ -395,7 +395,7 @@ export default function Home() {
             <div className="p-6 border-b border-gray-200 dark:border-gray-700 flex justify-between items-center">
               <div>
                 <h2 className="text-2xl font-bold">Manage Videos</h2>
-                <p className="text-sm text-gray-500">Hide specific videos you don't want your child to see.</p>
+                <p className="text-sm text-gray-500">Hide specific videos you don&apos;t want your child to see.</p>
               </div>
               <button onClick={() => setManagingChannelId(null)} className="text-gray-400 hover:text-gray-900 text-2xl font-bold">&times;</button>
             </div>
