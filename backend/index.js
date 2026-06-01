@@ -140,7 +140,7 @@ app.post('/api/channels', authenticate, async (req, res) => {
         let channelTitle = globalChannelDoc.exists ? globalChannelDoc.data().channelTitle : q;
 
         if (needsIndexing) {
-          const videoIds = await youtube.fetchChannelVideos(channelId, 50);
+          const videoIds = await youtube.fetchChannelVideos(channelId, 20);
           const approvedVideos = await youtube.filterAndGetVideos(videoIds, false, [], []);
           totalProcessed += videoIds.length; totalApproved += approvedVideos.length;
           if (approvedVideos.length > 0) channelTitle = approvedVideos[0].channelTitle;

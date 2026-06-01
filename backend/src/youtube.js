@@ -21,7 +21,7 @@ async function loadModel() {
  */
 async function getTensorFromImageUrl(url) {
   try {
-    const response = await axios.get(url, { responseType: 'arraybuffer' });
+    const response = await axios.get(url, { responseType: 'arraybuffer', timeout: 5000 });
     const image = jpeg.decode(response.data, { useTArray: true });
     
     const numChannels = 3;
@@ -174,14 +174,20 @@ async function filterAndGetVideos(videoIds, disableShorts = true, blockedCategor
       if (bestThumbnail && bestThumbnail.url) {
         const tensor = await getTensorFromImageUrl(bestThumbnail.url);
         if (tensor) {
-          const predictions = await nsfwModel.classify(tensor);
+          // Enforce a strict 1500ms timeout on AI processing
+          const timeoutPromise = new Promise(resolve => setTimeout(() => resolve('timeout'), 1500));
+          const predictions = await Promise.race([nsfwModel.classify(tensor), timeoutPromise]);
           tensor.dispose(); // Free memory
 
-          // Check the top prediction
-          const topPrediction = predictions[0].className;
-          if (topPrediction === 'Porn' || topPrediction === 'Sexy' || topPrediction === 'Hentai') {
-            isAiFlagged = true;
-            console.log(`Video ${video.id} flagged by AI. Top prediction: ${topPrediction}`);
+          if (predictions !== 'timeout') {
+            // Check the top prediction
+            const topPrediction = predictions[0].className;
+            if (topPrediction === 'Porn' || topPrediction === 'Sexy' || topPrediction === 'Hentai') {
+              isAiFlagged = true;
+              console.log(`Video ${video.id} flagged by AI. Top prediction: ${topPrediction}`);
+            }
+          } else {
+            console.warn(`Video ${video.id} skipped due to AI timeout.`);
           }
         }
       }
