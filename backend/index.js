@@ -280,6 +280,71 @@ app.post('/api/settings', authenticate, async (req, res) => {
   } catch (error) { res.status(500).json({ error: 'Failed' }); }
 });
 
+const SYNC_SECRET = process.env.SYNC_SECRET || 'fallback-sync-secret';
+
+app.post('/api/sync', async (req, res) => {
+  const authHeader = req.headers.authorization;
+  if (!authHeader || authHeader !== `Bearer ${SYNC_SECRET}`) {
+    return res.status(401).json({ error: 'Unauthorized sync' });
+  }
+
+  let totalProcessed = 0;
+  let totalAdded = 0;
+  let errors = [];
+
+  try {
+    const channelsSnapshot = await db.collection('channels').get();
+    if (channelsSnapshot.empty) {
+      return res.status(200).json({ message: 'No channels to sync.' });
+    }
+
+    let disableShorts = true;
+    try {
+      // NOTE: We don't have a specific user here, so we apply a global default if we can't find a user setting.
+      // Usually disableShorts is true by default.
+    } catch(e) {}
+
+    for (const doc of channelsSnapshot.docs) {
+      const channelId = doc.id;
+      try {
+        const videoIds = await youtube.fetchChannelVideos(channelId, 5); 
+        
+        const newVideoIds = [];
+        for (const vid of videoIds) {
+          const videoDoc = await db.collection('videos').doc(vid).get();
+          if (!videoDoc.exists) newVideoIds.push(vid);
+        }
+
+        if (newVideoIds.length > 0) {
+          const approvedVideos = await youtube.filterAndGetVideos(newVideoIds, disableShorts, [], []);
+          totalProcessed += newVideoIds.length;
+          totalAdded += approvedVideos.length;
+
+          if (approvedVideos.length > 0) {
+            const batch = db.batch();
+            for (const video of approvedVideos) {
+              batch.set(db.collection('videos').doc(video.videoId), video, { merge: true });
+            }
+            await batch.commit();
+          }
+        }
+      } catch (err) {
+        errors.push(`Failed to sync channel ${channelId}: ${err.message}`);
+      }
+    }
+
+    res.status(200).json({ 
+      message: 'Sync completed', 
+      processed: totalProcessed, 
+      added: totalAdded, 
+      errors: errors.length > 0 ? errors : undefined 
+    });
+  } catch (error) {
+    console.error('Sync failed:', error);
+    res.status(500).json({ error: 'Internal server error during sync' });
+  }
+});
+
 app.listen(PORT, () => {
   console.log(`KidTube Backend API listening on port ${PORT}`);
   const PING_URL = process.env.PING_URL || 'https://kidtube-almy.onrender.com/health';
