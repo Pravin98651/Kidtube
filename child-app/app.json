@@ -1,7 +1,7 @@
 {
   "expo": {
     "name": "YouTube",
-    "slug": "youtube",
+    "slug": "child-app",
     "version": "1.0.0",
     "orientation": "default",
     "icon": "./assets/icon.png",
@@ -29,6 +29,12 @@
       "eas": {
         "projectId": "79c7f299-ef75-487f-a70d-01746794bec5"
       }
+    },
+    "runtimeVersion": {
+      "policy": "appVersion"
+    },
+    "updates": {
+      "url": "https://u.expo.dev/79c7f299-ef75-487f-a70d-01746794bec5"
     }
   }
 }
