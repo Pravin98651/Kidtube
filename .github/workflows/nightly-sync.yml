@@ -10,11 +10,31 @@ jobs:
   sync:
     runs-on: ubuntu-latest
     steps:
+      - name: Validate Secrets
+        run: |
+          if [ -z "${{ secrets.BACKEND_URL }}" ]; then
+            echo "❌ ERROR: BACKEND_URL secret is not set in GitHub repository settings."
+            echo "Go to: Settings → Secrets and variables → Actions → New repository secret"
+            echo "Name: BACKEND_URL"
+            echo "Value: https://your-render-url.onrender.com"
+            exit 1
+          fi
+          if [ -z "${{ secrets.SYNC_SECRET }}" ]; then
+            echo "❌ ERROR: SYNC_SECRET secret is not set in GitHub repository settings."
+            echo "Go to: Settings → Secrets and variables → Actions → New repository secret"
+            echo "Name: SYNC_SECRET"
+            echo "Value: (same value as your SYNC_SECRET on Render)"
+            exit 1
+          fi
+          echo "✅ Secrets are configured correctly."
+
       - name: Hit Backend Sync Endpoint
         env:
           BACKEND_URL: ${{ secrets.BACKEND_URL }}
           SYNC_SECRET: ${{ secrets.SYNC_SECRET }}
         run: |
-          curl -X POST "$BACKEND_URL/api/sync" \
-          -H "Authorization: Bearer $SYNC_SECRET" \
-          -H "Content-Type: application/json"
+          echo "🔄 Pinging: $BACKEND_URL/api/sync"
+          curl --fail -X POST "$BACKEND_URL/api/sync" \
+            -H "Authorization: Bearer $SYNC_SECRET" \
+            -H "Content-Type: application/json"
+          echo "✅ Sync triggered successfully."
