@@ -70,6 +70,7 @@ export default function Home() {
   const fetchGlobalSettings = async (tk: string) => {
     try {
       const res = await fetch('https://kidtube-almy.onrender.com/api/settings', { headers: { 'Authorization': `Bearer ${tk}` } });
+      if (!res.ok) return;
       const data = await res.json();
       if (data.disableShorts !== undefined) setDisableShorts(data.disableShorts);
       if (data.educationalTollbooth !== undefined) setEducationalTollbooth(data.educationalTollbooth);
@@ -123,7 +124,7 @@ export default function Home() {
   // --- ACTION HANDLERS ---
   const handleCreateChild = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!newChildName.trim()) return;
+    if (!newChildName.trim() || !token) return;
     setLoadingChild(true);
     try {
       const res = await fetch('https://kidtube-almy.onrender.com/api/children', {
@@ -140,16 +141,22 @@ export default function Home() {
   };
 
   const handleUpdateChildSettings = async () => {
-    if (!selectedChild) return;
+    if (!selectedChild || !token) return;
     setSavingSettings(true);
     try {
-      await fetch(`https://kidtube-almy.onrender.com/api/children/${selectedChild.id}/settings`, {
+      const res = await fetch(`https://kidtube-almy.onrender.com/api/children/${selectedChild.id}/settings`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
         body: JSON.stringify({ dailyLimitMins, bedtime })
       });
-      setMessage({ text: 'Settings saved!', type: 'success' });
-      fetchChildren(token);
+      if (res.ok) {
+        setMessage({ text: 'Settings saved!', type: 'success' });
+        // Update selectedChild locally so the lock screen reflects new settings immediately
+        setSelectedChild((prev: any) => prev ? { ...prev, dailyLimitMins, bedtime } : prev);
+        fetchChildren(token);
+      } else {
+        setMessage({ text: 'Failed to save settings.', type: 'error' });
+      }
     } catch (e) { setMessage({ text: 'Failed to save settings', type: 'error' }); }
     setSavingSettings(false);
     setTimeout(() => setMessage({ text: '', type: '' }), 3000);

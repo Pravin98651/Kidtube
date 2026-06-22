@@ -180,10 +180,11 @@ export default function App() {
 
   const isLocked = () => {
     if (!selectedChild) return false;
+    // dailyLimitMins === 0 means unlimited — only lock if limit is explicitly set (> 0)
     if (selectedChild.dailyLimitMins > 0 && timeSpentToday >= selectedChild.dailyLimitMins) return true;
-    if (selectedChild.bedtime) {
+    if (selectedChild.bedtime && selectedChild.bedtime.length === 5) {
       const now = new Date();
-      const currentStr = now.toTimeString().substring(0, 5); // HH:MM
+      const currentStr = `${now.getHours().toString().padStart(2, '0')}:${now.getMinutes().toString().padStart(2, '0')}`;
       if (currentStr >= selectedChild.bedtime) return true;
     }
     return false;
