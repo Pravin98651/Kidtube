@@ -3,7 +3,8 @@ import { StyleSheet, Text, View, SafeAreaView, TouchableOpacity, Image, Platform
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import SafeVideoPlayer from './components/SafeVideoPlayer';
 import MathTollbooth from './components/MathTollbooth';
-import { useState, useEffect, memo, useCallback } from 'react';
+import { useState, useEffect, useRef, memo, useCallback } from 'react';
+import { useApi } from './hooks/useApi';
 
 const { height: SCREEN_HEIGHT, width: SCREEN_WIDTH } = Dimensions.get('window');
 
@@ -90,7 +91,8 @@ export default function App() {
   const [categories, setCategories] = useState<string[]>(['All']);
   const [loading, setLoading] = useState(false);
 
-  const baseUrl = 'https://kidtube-almy.onrender.com';
+  const baseUrl = 'https://kidtube-almy.onrender.com'; // kept for login handler below
+  const api = useApi();
 
   // INITIAL LOAD
   useEffect(() => {
@@ -105,30 +107,29 @@ export default function App() {
   useEffect(() => {
     if (!token) return;
     const fetchInitialData = async () => {
-      try {
-        const [settingsRes, childrenRes] = await Promise.all([
-          fetch(`${baseUrl}/api/settings`, { headers: { 'Authorization': `Bearer ${token}` } }),
-          fetch(`${baseUrl}/api/children`, { headers: { 'Authorization': `Bearer ${token}` } })
-        ]);
-        if (settingsRes.ok) {
-          const settings = await settingsRes.json();
-          if (settings.disableShorts !== undefined) setDisableShorts(settings.disableShorts);
-          if (settings.educationalTollbooth !== undefined) setEducationalTollbooth(settings.educationalTollbooth);
-        }
-        if (childrenRes.ok) {
-          const childrenData = await childrenRes.json();
-          setChildren(childrenData);
-        } else if (childrenRes.status === 401) handleLogout();
-      } catch (e) { console.error(e); }
+      const [settings, childrenData] = await Promise.all([
+        api.getSettings(),
+        api.getChildren(),
+      ]);
+      if (settings) {
+        if (settings.disableShorts !== undefined) setDisableShorts(settings.disableShorts);
+        if (settings.educationalTollbooth !== undefined) setEducationalTollbooth(settings.educationalTollbooth);
+      }
+      if (childrenData) {
+        setChildren(childrenData);
+      } else {
+        handleLogout(); // token is invalid
+      }
     };
     fetchInitialData();
   }, [token]);
 
-  // FETCH CHILD-SPECIFIC DATA & SCREEN TIME INIT
+  // FETCH CHILD-SPECIFIC DATA
   useEffect(() => {
     if (!token || !selectedChild) return;
     
     const fetchVideos = async () => {
+      // Load from cache first for instant UI
       try {
         const cachedVids = await AsyncStorage.getItem(`kidtube_cached_videos_${selectedChild.id}`);
         if (cachedVids) {
@@ -140,43 +141,42 @@ export default function App() {
       } catch (e) {}
 
       setLoading(true);
-      try {
-        const vidRes = await fetch(`${baseUrl}/api/videos?childId=${selectedChild.id}`, { headers: { 'Authorization': `Bearer ${token}` } });
-        if (vidRes.ok) {
-          const vids = await vidRes.json();
-          setVideos(vids);
-          AsyncStorage.setItem(`kidtube_cached_videos_${selectedChild.id}`, JSON.stringify(vids));
-          const uniqueChannelTitles = Array.from(new Set(vids.map((v: any) => v.channelTitle))).filter(Boolean);
-          setCategories(['All', ...uniqueChannelTitles] as string[]);
-        }
-      } catch (e) {}
+      const vids = await api.getVideos(selectedChild.id);
+      if (vids) {
+        setVideos(vids);
+        AsyncStorage.setItem(`kidtube_cached_videos_${selectedChild.id}`, JSON.stringify(vids));
+        const uniqueChannelTitles = Array.from(new Set(vids.map((v: any) => v.channelTitle))).filter(Boolean);
+        setCategories(['All', ...uniqueChannelTitles] as string[]);
+      }
       setLoading(false);
     };
 
     fetchVideos();
 
-    // Initialize screen time tracking
+    // Initialize today's screen time from storage
     const today = new Date().toISOString().split('T')[0];
-    const timeKey = `timeSpent_${selectedChild.id}_${today}`;
-    AsyncStorage.getItem(timeKey).then(val => {
-      if (val) setTimeSpentToday(parseInt(val));
-      else setTimeSpentToday(0);
+    AsyncStorage.getItem(`timeSpent_${selectedChild.id}_${today}`).then(val => {
+      setTimeSpentToday(val ? parseInt(val, 10) : 0);
     });
-  }, [token, selectedChild]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [token, selectedChild?.id]);
 
-  // SCREEN TIME TRACKING LOOP
+  // SCREEN TIME TRACKING LOOP (fixed stale closure via useRef)
+  const timeSpentTodayRef = useRef(timeSpentToday);
+  useEffect(() => { timeSpentTodayRef.current = timeSpentToday; }, [timeSpentToday]);
+
   useEffect(() => {
     if (!selectedChild) return;
+    const childId = selectedChild.id;
     const interval = setInterval(() => {
-      setTimeSpentToday(prev => {
-        const next = prev + 1;
-        const today = new Date().toISOString().split('T')[0];
-        AsyncStorage.setItem(`timeSpent_${selectedChild.id}_${today}`, next.toString());
-        return next;
-      });
+      const next = timeSpentTodayRef.current + 1;
+      timeSpentTodayRef.current = next;
+      setTimeSpentToday(next);
+      const today = new Date().toISOString().split('T')[0];
+      AsyncStorage.setItem(`timeSpent_${childId}_${today}`, String(next));
     }, 60000); // 1 minute
     return () => clearInterval(interval);
-  }, [selectedChild]);
+  }, [selectedChild?.id]);
 
   const isLocked = () => {
     if (!selectedChild) return false;
@@ -210,13 +210,12 @@ export default function App() {
 
   const logHistory = async (video: Video) => {
     if (!selectedChild) return;
-    try {
-      await fetch(`${baseUrl}/api/history`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
-        body: JSON.stringify({ childId: selectedChild.id, videoId: video.videoId, title: video.title, channelTitle: video.channelTitle, thumbnail: getThumbnailUrl(video) })
-      });
-    } catch (e) { console.error('Failed to log history:', e); }
+    await api.logHistory(selectedChild.id, {
+      videoId: video.videoId,
+      title: video.title,
+      channelTitle: video.channelTitle,
+      thumbnail: getThumbnailUrl(video),
+    });
   };
 
   const handleVideoSelect = (video: Video) => {
@@ -232,16 +231,10 @@ export default function App() {
   const handleTollboothSuccess = async () => {
     setShowTollbooth(false);
     setVideosWatchedCount(0);
-    // Add Stars!
     if (!selectedChild) return;
-    setSelectedChild({ ...selectedChild, stars: (selectedChild.stars || 0) + 10 });
-    try {
-      await fetch(`${baseUrl}/api/stars`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
-        body: JSON.stringify({ childId: selectedChild.id, starsToAdd: 10 })
-      });
-    } catch (e) {}
+    const newStars = (selectedChild.stars || 0) + 10;
+    setSelectedChild({ ...selectedChild, stars: newStars });
+    await api.awardStars(selectedChild.id, 10);
   };
 
   const handleLogout = async () => {

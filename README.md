@@ -1,185 +1,299 @@
 <div align="center">
-  <img src="https://upload.wikimedia.org/wikipedia/commons/e/e1/YouTube_play_buttom_icon_%282013-2017%29.svg" alt="KidTube Logo" width="120" height="120">
-  <h1 align="center">KidTube Platform</h1>
-  
-  <p align="center">
-    <strong>A totally secure, distraction-free YouTube sandbox built for absolute parental control.</strong>
+
+  <img src="https://upload.wikimedia.org/wikipedia/commons/e/e1/YouTube_play_buttom_icon_%282013-2017%29.svg" alt="KidTube Logo" width="100" height="100">
+
+  <h1>KidTube Platform</h1>
+
+  <p><strong>A fully isolated, AI-moderated YouTube sandbox built for absolute parental control.</strong></p>
+
+  <p>
+    <a href="#-overview">Overview</a> •
+    <a href="#-architecture">Architecture</a> •
+    <a href="#-features">Features</a> •
+    <a href="#-getting-started">Getting Started</a> •
+    <a href="#-api-reference">API Reference</a> •
+    <a href="#-deployment">Deployment</a>
   </p>
 
-  <p align="center">
-    <a href="#features">Features</a> •
-    <a href="#architecture">Architecture</a> •
-    <a href="#getting-started">Getting Started</a> •
-    <a href="#deployment">Deployment</a>
+  <p>
+    <img src="https://img.shields.io/badge/React_Native-Expo-000020?style=flat-square&logo=react" alt="Expo">
+    <img src="https://img.shields.io/badge/Next.js-14-000000?style=flat-square&logo=next.js" alt="Next.js">
+    <img src="https://img.shields.io/badge/Node.js-Express-339933?style=flat-square&logo=nodedotjs" alt="Node">
+    <img src="https://img.shields.io/badge/Firebase-Firestore-FFCA28?style=flat-square&logo=firebase" alt="Firebase">
+    <img src="https://img.shields.io/badge/TensorFlow-JS-FF6F00?style=flat-square&logo=tensorflow" alt="TensorFlow">
   </p>
 
-  <p align="center">
-    <img src="https://img.shields.io/badge/React_Native-Expo-000020?style=for-the-badge&logo=react" alt="Expo" />
-    <img src="https://img.shields.io/badge/Next.js-14-000000?style=for-the-badge&logo=next.js" alt="Next.js" />
-    <img src="https://img.shields.io/badge/Node.js-Express-339933?style=for-the-badge&logo=nodedotjs" alt="Node" />
-    <img src="https://img.shields.io/badge/Firebase-Firestore-FFCA28?style=for-the-badge&logo=firebase" alt="Firebase" />
-    <img src="https://img.shields.io/badge/TensorFlow-JS-FF6F00?style=for-the-badge&logo=tensorflow" alt="TensorFlow" />
-  </p>
 </div>
 
 ---
 
 ## 📖 Overview
 
-**KidTube** is a complete ecosystem that empowers parents to curate a 100% safe video-watching experience for their children. By stripping away YouTube's addictive recommendation algorithm, hiding comments, and utilizing localized AI vision models for thumbnail safety, KidTube ensures children are protected from digital "brain-rot" and inappropriate content.
+**KidTube** is a production-grade, three-tier platform that gives parents total control over their children's video-watching experience. It replaces YouTube's addictive recommendation engine with a **whitelist-only** model — if a parent hasn't explicitly approved a channel, it does not exist in the child's universe.
 
-Unlike standard parental controls, KidTube is a fully isolated **whitelist-only** ecosystem. If a parent hasn't explicitly approved a channel, it does not exist in the child's universe.
-
----
-
-## ✨ Core Features
-
-### 🛡️ For Parents (Dashboard)
-- **Granular Whitelisting**: Approve entire YouTube channels via URL or `@handle`.
-- **Micro-Level Blocking**: Hide specific videos from approved channels that you still don't want your child to see.
-- **Child Profiles**: Support for multiple children. Each child gets their own isolated feed, watch history, and screen time rules.
-- **Screen Time & Bedtime Limits**: Set maximum daily minutes and strict bedtimes. Once hit, the app securely locks down.
-- **Real-time Analytics**: View exactly what your child is watching, when they watched it, and for how long.
-- **Global Toggles**: Disable all YouTube Shorts system-wide with a single click.
-
-### 🎮 For Kids (Mobile App)
-- **Distraction-Free UI**: Clean, engaging interface without sidebar recommendations, auto-playing next videos, or comments.
-- **Sandbox Player**: Custom video player that physically blocks the hidden YouTube watermarks and end-screen cards, preventing accidental "escapes" to the native YouTube app.
-- **Gamification (Learn to Earn)**: An "Educational Tollbooth" pauses viewing after every 3 videos, requiring the child to solve a math problem to earn 🌟 Stars and unlock more screen time.
-- **Offline Resiliency**: Heavily cached architecture means the UI stays snappy even on poor network connections.
+> **Core Philosophy:** KidTube doesn't filter YouTube. It *replaces* it with a fully isolated, parent-curated environment.
 
 ---
 
 ## 🏗️ Architecture
 
-KidTube relies on a decoupled, three-tier architecture:
+```
+┌──────────────────────────────────────────────────────────────────┐
+│                         KidTube Platform                          │
+│                                                                    │
+│  ┌─────────────────┐      ┌──────────────────┐                    │
+│  │  Parent         │      │  Child            │                    │
+│  │  Dashboard      │      │  Mobile App       │                    │
+│  │  (Next.js 14)   │      │  (Expo / RN)      │                    │
+│  └────────┬────────┘      └────────┬──────────┘                   │
+│           │                        │                               │
+│           └──────────┬─────────────┘                              │
+│                      │ HTTPS / JWT                                 │
+│           ┌──────────▼──────────────────┐                         │
+│           │       Backend API           │                          │
+│           │    (Express / Node.js)       │                         │
+│           │                             │                          │
+│           │  ┌───────────┐  ┌────────┐  │                         │
+│           │  │ YouTube   │  │nsfwjs  │  │                         │
+│           │  │ Data API  │  │  AI    │  │                         │
+│           │  └─────┬─────┘  └───┬────┘  │                         │
+│           └────────┼────────────┼───────┘                         │
+│                    │            │                                  │
+│           ┌────────▼────────────▼───────┐                         │
+│           │     Firebase Firestore       │                         │
+│           └─────────────────────────────┘                         │
+└──────────────────────────────────────────────────────────────────┘
+```
 
-1. **📱 Mobile App (Frontend)**
-   - Built with **React Native (Expo)**.
-   - Handles the child's viewing experience, video playback (via `react-native-youtube-iframe`), and local screen time tracking.
-2. **💻 Parent Dashboard (Frontend)**
-   - Built with **Next.js 14** (App Router) and **Tailwind CSS**.
-   - Serves as the mission control for parents to manage profiles, authenticate devices, and curate content.
-3. **⚙️ Backend API (Middleware)**
-   - Built with **Node.js** and **Express**.
-   - Acts as the orchestrator. It queries the YouTube Data API v3, caches metadata in Firebase Firestore, and runs **TensorFlow.js** (`nsfwjs`) on the server to automatically reject inappropriate thumbnails.
+### Design Patterns Used
+
+| Pattern | Where Applied |
+|---|---|
+| **Router / Module Pattern** | Backend routes split into dedicated files (`src/routes/`) |
+| **Chain of Responsibility** | Auth middleware: tries Firebase token → falls back to JWT |
+| **Repository / API Client** | `parent-dashboard/src/lib/api.ts` — single source of truth for all HTTP calls |
+| **Custom Hook + Repository** | `child-app/hooks/useApi.ts` — encapsulates all network logic for the mobile app |
+| **Factory Pattern** | `src/middleware/validate.js` — produces composable validation middlewares |
+| **Observer Pattern** | React state + `useEffect` for reactive data fetching |
+
+---
+
+## ✨ Features
+
+### 🛡️ Parent Dashboard
+| Feature | Description |
+|---|---|
+| **Channel Whitelisting** | Approve channels by URL or `@handle`. Multiple channels can be added at once (comma-separated). |
+| **Video-Level Blocking** | See every video from an approved channel and individually hide specific ones. |
+| **Multi-Child Profiles** | Each child gets their own isolated feed, history, stars, and screen-time rules. |
+| **Screen Time Limits** | Set a daily minute cap. Once reached, the child's app locks down. |
+| **Bedtime Lock** | Set a time (e.g. `20:00`) after which the app shows a sleep screen. |
+| **Gamification Toggle** | Enable/disable the Educational Tollbooth globally. |
+| **Shorts Toggle** | Disable the Shorts tab entirely across all child devices. |
+| **Watch History** | See a timestamped log of every video your child has watched. |
+
+### 📱 Child Mobile App
+| Feature | Description |
+|---|---|
+| **Distraction-Free Player** | Custom video player with touch blockers over YouTube watermarks, share buttons, and end-screen recommendations. |
+| **Profile Selector** | "Who's Watching?" screen supports multiple children on one device. |
+| **Educational Tollbooth** | After every 3 videos, a math problem must be solved to earn ⭐ Stars. |
+| **Sleep Screen** | Full-screen lock when the daily limit or bedtime is reached. |
+| **Offline Cache** | Video feed is cached in `AsyncStorage` for instant UI on poor connections. |
+
+### 🧠 AI Thumbnail Moderation
+When a channel is added, the backend automatically:
+1. Fetches the 20 most recent video IDs
+2. Downloads each thumbnail
+3. Runs **TensorFlow.js** + `nsfwjs` locally with a 1.5s timeout
+4. Rejects any video classified as `Porn`, `Sexy`, or `Hentai`
 
 ---
 
 ## 🚀 Getting Started
 
 ### Prerequisites
-Before you begin, ensure you have the following API keys and services set up:
-- **Node.js** (v18 or higher)
-- **Firebase Project**: (Requires Authentication and Firestore Database enabled)
-- **Google Cloud Console**: YouTube Data API v3 Key
 
-### 1. Backend Setup
+- **Node.js** ≥ 18
+- **Expo CLI** (`npm install -g expo-cli`)
+- **EAS CLI** (`npm install -g eas-cli`)
+- A **Firebase Project** with Firestore and Authentication enabled
+- A **Google Cloud** YouTube Data API v3 key
 
-The backend handles all heavy lifting, including AI processing and database transactions.
+---
+
+### 1. Backend
 
 ```bash
 cd backend
 npm install
 ```
 
-Create a `.env` file in the `backend/` directory:
+Create `backend/.env`:
+
 ```env
+# Required
 PORT=8080
-JWT_SECRET=your_super_secret_jwt_key
-YOUTUBE_API_KEY=your_google_cloud_youtube_api_key
+JWT_SECRET=your-secret-key-change-this-in-production
+YOUTUBE_API_KEY=your-youtube-data-api-v3-key
+FIREBASE_SERVICE_ACCOUNT={"type":"service_account",...}  # paste the full JSON as one line
+
+# Optional — for nightly sync job
+SYNC_SECRET=a-long-random-secret-string
+PING_URL=https://your-render-url.onrender.com/health
 ```
 
-You must also place your Firebase Admin SDK Service Account JSON file inside `backend/src/` and link it in `firebase.js`.
+> **Alternative:** Place `firebase-service-account.json` in `backend/` instead of using the env var.
 
-Start the development server:
 ```bash
 npm start
+# → ✅ KidTube Backend API listening on port 8080
 ```
-*Note: The backend runs an internal cron job every 14 minutes to prevent Render free-tier spin downs.*
 
-### 2. Parent Dashboard Setup
+---
 
-The dashboard is the parent's control center.
+### 2. Parent Dashboard
 
 ```bash
 cd parent-dashboard
 npm install
 ```
 
-Create a `.env.local` file in the `parent-dashboard/` directory:
+Create `parent-dashboard/.env.local`:
+
 ```env
-NEXT_PUBLIC_FIREBASE_API_KEY=your_firebase_api_key
-NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN=your_project.firebaseapp.com
-NEXT_PUBLIC_FIREBASE_PROJECT_ID=your_project_id
+NEXT_PUBLIC_FIREBASE_API_KEY=your-firebase-api-key
+NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN=your-project.firebaseapp.com
+NEXT_PUBLIC_FIREBASE_PROJECT_ID=your-project-id
+NEXT_PUBLIC_BACKEND_URL=http://localhost:8080   # or your Render URL in production
 ```
 
-Start the Next.js development server:
 ```bash
 npm run dev
+# → Navigate to http://localhost:3000
 ```
-Navigate to `http://localhost:3000` to create your Parent account.
 
-### 3. Child App Setup
+---
 
-The React Native application for the child's device.
+### 3. Child App
 
 ```bash
 cd child-app
 npm install
 ```
 
-Update the backend URL:
-Open `child-app/App.tsx` and change `baseUrl` to point to your backend:
-```typescript
-const baseUrl = 'http://YOUR_LOCAL_IP:8080'; // or your Render production URL
-```
-
-Start Expo:
 ```bash
 npx expo start
+# → Scan the QR code with the Expo Go app
 ```
-Scan the QR code with the **Expo Go** app on your physical device.
 
 ---
 
-## 🧠 AI Thumbnail Moderation
+## 📊 Firestore Data Model
 
-When a parent adds a new channel, the backend retrieves the channel's 20 most recent videos. Before committing them to the database, it downloads the highest resolution thumbnail available and processes it locally using **TensorFlow.js** and the `nsfwjs` model. 
+```
+accounts/
+  {email}/                   ← Parent account with hashed device password
 
-If the model detects inappropriate content (`Porn`, `Sexy`, or `Hentai`) with high confidence, the video is instantly rejected and never makes it to the child's feed. To ensure stability on low-memory servers (like Render free-tier), the AI evaluation enforces a strict 1.5-second processing timeout per image.
+users/
+  {uid}/
+    settings/
+      global/                ← { disableShorts, educationalTollbooth }
+    children/
+      {childId}/             ← { name, stars, dailyLimitMins, bedtime, hiddenVideos[], history[] }
+        subscriptions/
+          {channelId}/       ← { channelId, channelTitle, addedAt }
+
+channels/
+  {channelId}/               ← Global channel registry { channelId, channelTitle, addedAt }
+
+videos/
+  {videoId}/                 ← { videoId, title, channelId, thumbnails, publishedAt, duration }
+```
+
+---
+
+## 📡 API Reference
+
+All endpoints (except `/health`, `/api/sync`, and auth endpoints) require:
+```
+Authorization: Bearer <token>
+```
+
+| Method | Path | Auth | Description |
+|---|---|---|---|
+| `GET` | `/health` | None | Service health check |
+| `POST` | `/api/signup` | None | Create a parent account |
+| `POST` | `/api/login` | None | Authenticate (returns JWT) |
+| `POST` | `/api/device-password` | Token | Set child device password |
+| `GET` | `/api/children` | Token | List child profiles |
+| `POST` | `/api/children` | Token | Create a child profile |
+| `POST` | `/api/children/:id/settings` | Token | Update screen time rules |
+| `GET` | `/api/channels?childId=` | Token | List approved channels |
+| `POST` | `/api/channels` | Token | Approve a channel (triggers AI scan) |
+| `DELETE` | `/api/channels/:id?childId=` | Token | Remove a channel |
+| `GET` | `/api/videos?childId=` | Token | Get video feed for a child |
+| `POST` | `/api/videos/hide` | Token | Hide a video for a child |
+| `POST` | `/api/videos/unhide` | Token | Unhide a video |
+| `POST` | `/api/videos/stars` | Token | Award stars to a child |
+| `GET` | `/api/settings` | Token | Get global settings |
+| `POST` | `/api/settings` | Token | Update global settings |
+| `GET` | `/api/history?childId=` | Token | Get watch history |
+| `POST` | `/api/history` | Token | Log a watch event |
+| `POST` | `/api/sync` | Sync Secret | Nightly video sync (GitHub Actions) |
 
 ---
 
 ## 📦 Deployment
 
-### Parent Dashboard 
-The web application is highly optimized for **Vercel**. Push your code to GitHub, import the repository to Vercel, configure your `.env.local` variables, and deploy instantly.
+### Backend → Render
 
-### Backend API
-The Express backend is optimized for **Render**. 
-- Connect your GitHub repository to a new Render Web Service.
-- Build Command: `npm install`
-- Start Command: `npm start`
-- *Pro Tip: Add your deployed Render URL to the `PING_URL` variable in `index.js` so the server pings itself and stays awake.*
+1. Connect your GitHub repo to a new **Render Web Service**
+2. Set **Build Command:** `npm install`
+3. Set **Start Command:** `npm start`
+4. Add all environment variables from the `.env` table above in Render's dashboard
 
-### Child Mobile App
-Use **Expo Application Services (EAS)** to compile the raw APK/IPA.
+### Parent Dashboard → Vercel
+
+1. Import the GitHub repo to Vercel
+2. Set **Root Directory** to `parent-dashboard`
+3. Add all `NEXT_PUBLIC_*` environment variables
+
+### Child App → EAS Build
+
 ```bash
-npm install -g eas-cli
+cd child-app
 eas login
-eas build -p android --profile preview
+eas build -p android --profile production
+# Download the .apk and sideload onto the child's device
 ```
-Download the resulting `.apk` file and install it directly onto the child's Android tablet.
 
 ---
 
-## 🔒 Security & Privacy
-- **No Trackers**: KidTube contains absolutely no ad-trackers or analytics engines.
-- **Isolated Authentication**: Child devices authenticate using a custom JWT linked to the parent's account. The child device never holds the parent's actual Firebase credentials.
-- **Data Ownership**: All watch history and settings are stored entirely in your private Firebase Firestore instance.
+## 🔒 Security
+
+- **No ads or trackers** in the child app
+- **JWT-based isolation**: child devices never hold parent Firebase credentials
+- **AI moderation** runs server-side with a strict per-image timeout
+- **Whitelist-only**: zero chance of accidental exposure to unreviewed content
+- **Input validation** on all API routes via factory-based middleware
+- **Field whitelisting** in settings routes prevents arbitrary data injection
 
 ---
+
+## 🌙 Nightly Sync
+
+A GitHub Actions cron job runs daily at 02:00 UTC to keep video feeds fresh.
+
+**Required GitHub Secrets:**
+
+| Secret | Value |
+|---|---|
+| `BACKEND_URL` | Your Render URL (e.g. `https://kidtube-almy.onrender.com`) |
+| `SYNC_SECRET` | Must match `SYNC_SECRET` in your Render environment |
+
+---
+
 <div align="center">
   <i>Built with ❤️ for parents who want their kids to learn, not just scroll.</i>
 </div>
