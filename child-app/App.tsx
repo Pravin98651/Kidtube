@@ -97,11 +97,11 @@ export default function App() {
   const [overridePassword, setOverridePassword] = useState('');
 
   const viewabilityConfig = useRef({ itemVisiblePercentThreshold: 50 }).current;
-  const onViewableItemsChanged = useCallback(({ viewableItems }: any) => {
+  const onViewableItemsChanged = useRef(({ viewableItems }: any) => {
     if (viewableItems.length > 0) {
       setPlayingShortId(viewableItems[0].item.videoId);
     }
-  }, []);
+  }).current;
 
   const baseUrl = 'https://kidtube-almy.onrender.com'; // kept for login handler below
   const api = useApi();
