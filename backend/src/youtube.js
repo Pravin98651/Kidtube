@@ -174,10 +174,11 @@ async function filterAndGetVideos(videoIds, disableShorts = true, blockedCategor
     for (const video of candidateVideos) {
       const thumbnails = video.snippet.thumbnails;
       const bestThumbnail = thumbnails.maxres || thumbnails.high || thumbnails.medium || thumbnails.default;
+      const aiThumbnail = thumbnails.medium || thumbnails.default || bestThumbnail;
       let isAiFlagged = false;
 
-      if (bestThumbnail && bestThumbnail.url) {
-        const tensor = await getTensorFromImageUrl(bestThumbnail.url);
+      if (aiThumbnail && aiThumbnail.url) {
+        const tensor = await getTensorFromImageUrl(aiThumbnail.url);
         if (tensor) {
           // Enforce a strict 1500ms timeout on AI processing
           const timeoutPromise = new Promise(resolve => setTimeout(() => resolve('timeout'), 1500));
