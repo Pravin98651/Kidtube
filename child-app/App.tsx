@@ -91,6 +91,11 @@ export default function App() {
   const [categories, setCategories] = useState<string[]>(['All']);
   const [loading, setLoading] = useState(false);
 
+  // Override State
+  const [overrideUnlocked, setOverrideUnlocked] = useState(false);
+  const [showOverrideInput, setShowOverrideInput] = useState(false);
+  const [overridePassword, setOverridePassword] = useState('');
+
   const baseUrl = 'https://kidtube-almy.onrender.com'; // kept for login handler below
   const api = useApi();
 
@@ -237,6 +242,33 @@ export default function App() {
     await api.awardStars(selectedChild.id, 10);
   };
 
+  const renderHomeItem = useCallback(({ item }: { item: Video }) => (
+    <VideoCard video={item} onPress={() => handleVideoSelect(item)} />
+  ), [handleVideoSelect]);
+
+  const renderShortItem = useCallback(({ item: video }: { item: Video }) => (
+    <View style={styles.shortCard}>
+      <Image source={{ uri: getThumbnailUrl(video) }} style={StyleSheet.absoluteFill} resizeMode="cover" blurRadius={3} />
+      <View style={[StyleSheet.absoluteFill, { backgroundColor: 'rgba(0,0,0,0.4)' }]} />
+      {playingShortId === video.videoId ? (
+        <View style={styles.shortPlayerWrapper}>
+          <SafeVideoPlayer videoId={video.videoId} vertical={true} />
+        </View>
+      ) : (
+        <TouchableOpacity style={styles.shortPlayButton} onPress={() => setPlayingShortId(video.videoId)} activeOpacity={0.8}>
+          <View style={styles.shortPlayIcon}><View style={styles.shortPlayTriangle} /></View>
+        </TouchableOpacity>
+      )}
+      <View style={styles.shortOverlay}>
+        <Text style={styles.shortTitle} numberOfLines={2}>{video.title}</Text>
+        <View style={styles.shortChannelRow}>
+          <Image source={{ uri: `https://ui-avatars.com/api/?name=${encodeURIComponent(video.channelTitle)}&background=random&color=fff&rounded=true&size=32` }} style={styles.shortChannelAvatar} />
+          <Text style={styles.shortSubtitle}>{video.channelTitle}</Text>
+        </View>
+      </View>
+    </View>
+  ), [playingShortId]);
+
   const handleLogout = async () => {
     await AsyncStorage.removeItem('kidtube_token');
     setToken(null);
@@ -287,9 +319,7 @@ export default function App() {
     );
   }
 
-  const [overrideUnlocked, setOverrideUnlocked] = useState(false);
-  const [showOverrideInput, setShowOverrideInput] = useState(false);
-  const [overridePassword, setOverridePassword] = useState('');
+  // Parent Override Handlers
 
   const handleOverrideUnlock = async () => {
     if (!overridePassword) return;
@@ -358,32 +388,6 @@ export default function App() {
     if (shortsVideos.length > 0 && !playingShortId) setPlayingShortId(shortsVideos[0].videoId);
   };
 
-  const renderHomeItem = React.useCallback(({ item }: { item: Video }) => (
-    <VideoCard video={item} onPress={() => handleVideoSelect(item)} />
-  ), [handleVideoSelect]);
-
-  const renderShortItem = React.useCallback(({ item: video }: { item: Video }) => (
-    <View style={styles.shortCard}>
-      <Image source={{ uri: getThumbnailUrl(video) }} style={StyleSheet.absoluteFill} resizeMode="cover" blurRadius={3} />
-      <View style={[StyleSheet.absoluteFill, { backgroundColor: 'rgba(0,0,0,0.4)' }]} />
-      {playingShortId === video.videoId ? (
-        <View style={styles.shortPlayerWrapper}>
-          <SafeVideoPlayer videoId={video.videoId} vertical={true} />
-        </View>
-      ) : (
-        <TouchableOpacity style={styles.shortPlayButton} onPress={() => setPlayingShortId(video.videoId)} activeOpacity={0.8}>
-          <View style={styles.shortPlayIcon}><View style={styles.shortPlayTriangle} /></View>
-        </TouchableOpacity>
-      )}
-      <View style={styles.shortOverlay}>
-        <Text style={styles.shortTitle} numberOfLines={2}>{video.title}</Text>
-        <View style={styles.shortChannelRow}>
-          <Image source={{ uri: `https://ui-avatars.com/api/?name=${encodeURIComponent(video.channelTitle)}&background=random&color=fff&rounded=true&size=32` }} style={styles.shortChannelAvatar} />
-          <Text style={styles.shortSubtitle}>{video.channelTitle}</Text>
-        </View>
-      </View>
-    </View>
-  ), [playingShortId]);
 
   const ListHeader = () => (
     <View style={styles.headerSection}>
