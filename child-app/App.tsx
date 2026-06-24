@@ -64,6 +64,15 @@ const VideoCard = memo(({ video, onPress }: { video: Video, onPress: () => void 
 });
 VideoCard.displayName = 'VideoCard';
 
+let globalSetPlayingShortId: ((id: string) => void) | null = null;
+const FIXED_VIEWABILITY_CONFIG = { itemVisiblePercentThreshold: 50 };
+const FIXED_ON_VIEWABLE_ITEMS_CHANGED = ({ viewableItems }: any) => {
+  const visibleItem = viewableItems.find((item: any) => item.isViewable);
+  if (visibleItem && globalSetPlayingShortId) {
+    globalSetPlayingShortId(visibleItem.item.videoId);
+  }
+};
+
 export default function App() {
   const [token, setToken] = useState<string | null>(null);
   const [email, setEmail] = useState('');
@@ -96,13 +105,7 @@ export default function App() {
   const [showOverrideInput, setShowOverrideInput] = useState(false);
   const [overridePassword, setOverridePassword] = useState('');
 
-  const [viewabilityConfig] = useState(() => ({ itemVisiblePercentThreshold: 50 }));
-  const [onViewableItemsChanged] = useState(() => ({ viewableItems }: any) => {
-    const visibleItem = viewableItems.find((item: any) => item.isViewable);
-    if (visibleItem) {
-      setPlayingShortId(visibleItem.item.videoId);
-    }
-  });
+  globalSetPlayingShortId = setPlayingShortId;
 
   const baseUrl = 'https://kidtube-almy.onrender.com'; // kept for login handler below
   const api = useApi();
@@ -462,8 +465,8 @@ export default function App() {
           snapToAlignment="start"
           windowSize={3}
           initialNumToRender={2}
-          viewabilityConfig={viewabilityConfig}
-          onViewableItemsChanged={onViewableItemsChanged}
+          viewabilityConfig={FIXED_VIEWABILITY_CONFIG}
+          onViewableItemsChanged={FIXED_ON_VIEWABLE_ITEMS_CHANGED}
         />
       </View>
     );
