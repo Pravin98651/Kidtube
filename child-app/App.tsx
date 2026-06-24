@@ -96,6 +96,13 @@ export default function App() {
   const [showOverrideInput, setShowOverrideInput] = useState(false);
   const [overridePassword, setOverridePassword] = useState('');
 
+  const viewabilityConfig = useRef({ itemVisiblePercentThreshold: 50 }).current;
+  const onViewableItemsChanged = useCallback(({ viewableItems }: any) => {
+    if (viewableItems.length > 0) {
+      setPlayingShortId(viewableItems[0].item.videoId);
+    }
+  }, []);
+
   const baseUrl = 'https://kidtube-almy.onrender.com'; // kept for login handler below
   const api = useApi();
 
@@ -454,11 +461,8 @@ export default function App() {
           snapToAlignment="start"
           windowSize={3}
           initialNumToRender={2}
-          onMomentumScrollEnd={(e) => {
-            const index = Math.round(e.nativeEvent.contentOffset.y / (SCREEN_HEIGHT - 190));
-            const safeIndex = Math.min(index, shortsVideos.length - 1);
-            if (safeIndex >= 0 && shortsVideos[safeIndex]) setPlayingShortId(shortsVideos[safeIndex].videoId);
-          }}
+          viewabilityConfig={viewabilityConfig}
+          onViewableItemsChanged={onViewableItemsChanged}
         />
       </View>
     );
