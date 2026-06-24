@@ -613,7 +613,7 @@ const styles = StyleSheet.create({
   shortPlayIcon: { width: 64, height: 64, borderRadius: 32, backgroundColor: 'rgba(255,255,255,0.3)', justifyContent: 'center', alignItems: 'center' },
   shortPlayTriangle: { width: 0, height: 0, borderStyle: 'solid', borderLeftWidth: 20, borderBottomWidth: 14, borderTopWidth: 14, borderLeftColor: '#FFFFFF', borderRightColor: 'transparent', borderBottomColor: 'transparent', borderTopColor: 'transparent', marginLeft: 6 },
   shortOverlay: { position: 'absolute', bottom: 16, left: 14, right: 70 },
-  shortTitle: { color: '#FFF', fontSize: 14, fontWeight: '600', marginBottom: 10, textShadowColor: 'rgba(0,0,0,0.8)', textShadowOffset: {width:1,height:1}, textShadowRadius: 4, lineHeight: 20 },
+  shortTitle: { color: '#FFF', fontSize: 14, fontWeight: '600', marginBottom: 10, textShadow: '1px 1px 4px rgba(0,0,0,0.8)', lineHeight: 20 },
   shortChannelRow: { flexDirection: 'row', alignItems: 'center' },
   shortChannelAvatar: { width: 28, height: 28, borderRadius: 14, marginRight: 8, borderWidth: 1, borderColor: 'rgba(255,255,255,0.3)' },
   shortSubtitle: { color: '#FFF', fontSize: 13, fontWeight: '500' },

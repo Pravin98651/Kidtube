@@ -117,9 +117,7 @@ const styles = StyleSheet.create({
     maxWidth: 400,
     alignItems: 'center',
     elevation: 10,
-    shadowColor: '#000',
-    shadowOpacity: 0.3,
-    shadowRadius: 20,
+    boxShadow: '0px 0px 20px rgba(0,0,0,0.3)',
   },
   title: {
     fontSize: 24,
