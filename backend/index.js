@@ -30,7 +30,7 @@ const PORT = process.env.PORT || 8080;
 // ─── Global Middleware ────────────────────────────────────────────────────────
 const allowedOrigins = process.env.ALLOWED_ORIGINS 
   ? process.env.ALLOWED_ORIGINS.split(',') 
-  : ['http://localhost:3000', 'exp://localhost:8081'];
+  : ['http://localhost:3000', 'exp://localhost:8081', 'http://localhost:8081'];
 
 app.use(cors({
   origin: function (origin, callback) {
