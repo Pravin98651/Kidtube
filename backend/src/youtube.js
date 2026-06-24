@@ -168,10 +168,10 @@ async function filterAndGetVideos(videoIds, disableShorts = true, blockedCategor
       candidateVideos.push(video);
     }
 
-    // --- CONCURRENT AI THUMBNAIL SCREENING ---
+    // --- SEQUENTIAL AI THUMBNAIL SCREENING (prevent OOM) ---
     const approvedVideos = [];
     
-    await Promise.all(candidateVideos.map(async (video) => {
+    for (const video of candidateVideos) {
       const thumbnails = video.snippet.thumbnails;
       const bestThumbnail = thumbnails.maxres || thumbnails.high || thumbnails.medium || thumbnails.default;
       let isAiFlagged = false;
@@ -210,7 +210,7 @@ async function filterAndGetVideos(videoIds, disableShorts = true, blockedCategor
           publishedAt: video.snippet.publishedAt || new Date().toISOString()
         });
       }
-    }));
+    }
 
     return approvedVideos;
   } catch (error) {
