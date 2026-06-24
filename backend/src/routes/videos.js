@@ -36,24 +36,29 @@ router.get('/', authenticate, requireQuery('childId'), async (req, res) => {
 
     if (targetChannelIds.length === 0) return res.status(200).json([]);
 
-    // Fetch videos for target channels in parallel
+    // Fetch all videos for target channels
     const videoSnapshots = await Promise.all(
       targetChannelIds.map((cid) =>
-        db.collection('videos').where('channelId', '==', cid).limit(50).get()
+        db.collection('videos').where('channelId', '==', cid).get()
       )
     );
 
     const videos = [];
     for (const snapshot of videoSnapshots) {
-      for (const doc of snapshot.docs) {
-        const isHidden = hiddenVideos.includes(doc.id);
+      // Sort the channel's videos by newest first, and take the top 50
+      const channelVideos = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+      channelVideos.sort((a, b) => new Date(b.publishedAt) - new Date(a.publishedAt));
+      const latest50 = channelVideos.slice(0, 50);
+
+      for (const video of latest50) {
+        const isHidden = hiddenVideos.includes(video.id);
         if (includeHidden === 'true' || !isHidden) {
-          videos.push({ id: doc.id, isHidden, ...doc.data() });
+          videos.push({ ...video, isHidden });
         }
       }
     }
 
-    // Sort by newest first
+    // Finally, sort all the combined videos across all channels by newest first
     videos.sort((a, b) => new Date(b.publishedAt) - new Date(a.publishedAt));
     res.status(200).json(videos);
   } catch (err) {
