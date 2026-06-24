@@ -1,45 +1,6 @@
 const { google } = require('googleapis');
-const nsfwjs = require('nsfwjs');
-const tf = require('@tensorflow/tfjs');
-const jpeg = require('jpeg-js');
-const axios = require('axios');
 require('dotenv').config();
 
-// Global model instance
-let nsfwModel = null;
-async function loadModel() {
-  if (!nsfwModel) {
-    console.log('Loading NSFWJS model...');
-    nsfwModel = await nsfwjs.load();
-    console.log('NSFWJS model loaded.');
-  }
-  return nsfwModel;
-}
-
-/**
- * Downloads a JPEG and returns a TF tensor
- */
-async function getTensorFromImageUrl(url) {
-  try {
-    const response = await axios.get(url, { responseType: 'arraybuffer', timeout: 5000 });
-    const image = jpeg.decode(response.data, { useTArray: true });
-    
-    const numChannels = 3;
-    const numPixels = image.width * image.height;
-    const values = new Int32Array(numPixels * numChannels);
-
-    for (let i = 0; i < numPixels; i++) {
-      for (let channel = 0; channel < numChannels; channel++) {
-        values[i * numChannels + channel] = image.data[i * 4 + channel];
-      }
-    }
-    
-    return tf.tensor3d(values, [image.height, image.width, numChannels], 'int32');
-  } catch (error) {
-    console.warn(`Failed to decode image from ${url}:`, error.message);
-    return null;
-  }
-}
 
 const youtube = google.youtube({
   version: 'v3',
@@ -131,8 +92,7 @@ function parseDurationToSeconds(duration) {
 async function filterAndGetVideos(videoIds, disableShorts = true, blockedCategoryIds = [], blockedKeywords = []) {
   if (!videoIds || videoIds.length === 0) return [];
 
-  // Ensure model is loaded
-  await loadModel();
+
 
   try {
     const res = await youtube.videos.list({
@@ -168,50 +128,18 @@ async function filterAndGetVideos(videoIds, disableShorts = true, blockedCategor
       candidateVideos.push(video);
     }
 
-    // --- SEQUENTIAL AI THUMBNAIL SCREENING (prevent OOM) ---
-    const approvedVideos = [];
-    
-    for (const video of candidateVideos) {
-      const thumbnails = video.snippet.thumbnails;
-      const bestThumbnail = thumbnails.maxres || thumbnails.high || thumbnails.medium || thumbnails.default;
-      const aiThumbnail = thumbnails.medium || thumbnails.default || bestThumbnail;
-      let isAiFlagged = false;
-
-      if (aiThumbnail && aiThumbnail.url) {
-        const tensor = await getTensorFromImageUrl(aiThumbnail.url);
-        if (tensor) {
-          // Enforce a strict 1500ms timeout on AI processing
-          const timeoutPromise = new Promise(resolve => setTimeout(() => resolve('timeout'), 1500));
-          const predictions = await Promise.race([nsfwModel.classify(tensor), timeoutPromise]);
-          tensor.dispose(); // Free memory
-
-          if (predictions !== 'timeout') {
-            // Check the top prediction
-            const topPrediction = predictions[0].className;
-            if (topPrediction === 'Porn' || topPrediction === 'Sexy' || topPrediction === 'Hentai') {
-              isAiFlagged = true;
-              console.log(`Video ${video.id} flagged by AI. Top prediction: ${topPrediction}`);
-            }
-          } else {
-            console.warn(`Video ${video.id} skipped due to AI timeout.`);
-          }
-        }
-      }
-
-      if (!isAiFlagged) {
-        approvedVideos.push({
-          videoId: video.id || '',
-          title: video.snippet.title || '',
-          description: video.snippet.description || '',
-          thumbnails: video.snippet.thumbnails || {},
-          channelId: video.snippet.channelId || '',
-          channelTitle: video.snippet.channelTitle || 'Unknown Channel',
-          categoryId: video.snippet.categoryId || '',
-          duration: parseDurationToSeconds(video.contentDetails.duration) || 0,
-          publishedAt: video.snippet.publishedAt || new Date().toISOString()
-        });
-      }
-    }
+    // --- FORMAT APPROVED VIDEOS ---
+    const approvedVideos = candidateVideos.map(video => ({
+      videoId: video.id || '',
+      title: video.snippet.title || '',
+      description: video.snippet.description || '',
+      thumbnails: video.snippet.thumbnails || {},
+      channelId: video.snippet.channelId || '',
+      channelTitle: video.snippet.channelTitle || 'Unknown Channel',
+      categoryId: video.snippet.categoryId || '',
+      duration: parseDurationToSeconds(video.contentDetails.duration) || 0,
+      publishedAt: video.snippet.publishedAt || new Date().toISOString()
+    }));
 
     return approvedVideos;
   } catch (error) {
