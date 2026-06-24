@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import { api } from '../lib/api';
 
@@ -36,7 +36,7 @@ interface HistoryItem {
   timestamp: string;
 }
 
-type Message = { text: string; type: 'success' | 'error' | 'info' | '' };
+type Message = { text: string; type: 'success' | 'error' | 'info' | ''; onUndo?: () => void };
 
 export default function Home() {
   // ─── Auth ─────────────────────────────────────────────────────────────────
@@ -74,9 +74,11 @@ export default function Home() {
 
   const router = useRouter();
 
-  const showMessage = (text: string, type: Message['type'], duration = 3000) => {
-    setMessage({ text, type });
-    setTimeout(() => setMessage({ text: '', type: '' }), duration);
+  const messageTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const showMessage = (text: string, type: Message['type'], duration = 3000, onUndo?: () => void) => {
+    if (messageTimeoutRef.current) clearTimeout(messageTimeoutRef.current);
+    setMessage({ text, type, onUndo });
+    messageTimeoutRef.current = setTimeout(() => setMessage({ text: '', type: '' }), duration);
   };
 
   // ─── Initial Load ─────────────────────────────────────────────────────────
@@ -182,30 +184,48 @@ export default function Home() {
   const handleAddChannel = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!newChannel || !selectedChild) return;
-    setLoadingChannel(true);
-    showMessage('Analyzing channel safety with AI...', 'info', 60000);
+    
+    const channelToAdd = newChannel;
+    setNewChannel('');
+    showMessage(`Analyzing ${channelToAdd} with AI...`, 'info', 60000);
+    
     try {
-      const data = await api.channels.add(newChannel, selectedChild.id) as { message?: string };
-      setNewChannel('');
-      showMessage(data.message || 'Channel added!', 'success');
+      const data = await api.channels.add(channelToAdd, selectedChild.id) as { message?: string };
+      showMessage(data.message || `Channel ${channelToAdd} added!`, 'success');
       const updated = await api.channels.list(selectedChild.id);
       setChannels(updated);
     } catch (err: any) {
-      showMessage(err.message || 'Failed to add channel.', 'error');
-    } finally {
-      setLoadingChannel(false);
+      showMessage(err.message || `Failed to add ${channelToAdd}.`, 'error');
     }
   };
 
   // ─── Action: Remove Channel ───────────────────────────────────────────────
-  const handleRemoveChannel = async (channelId: string) => {
-    if (!confirm('Remove this channel for this child?') || !selectedChild) return;
-    try {
-      await api.channels.remove(channelId, selectedChild.id);
-      setChannels((prev) => prev.filter((c) => c.id !== channelId));
-    } catch (err: any) {
-      showMessage(err.message || 'Failed to remove channel.', 'error');
-    }
+  const removeTimeouts = useRef<{ [key: string]: NodeJS.Timeout }>({});
+
+  const handleRemoveChannel = (channel: Channel) => {
+    if (!selectedChild) return;
+
+    // Optimistic removal
+    setChannels((prev) => prev.filter((c) => c.id !== channel.id));
+
+    const timeout = setTimeout(async () => {
+      try {
+        await api.channels.remove(channel.id, selectedChild.id);
+      } catch (err: any) {
+        showMessage(err.message || 'Failed to remove channel.', 'error');
+        api.channels.list(selectedChild.id).then(setChannels).catch(() => {});
+      }
+      delete removeTimeouts.current[channel.id];
+    }, 5000);
+
+    removeTimeouts.current[channel.id] = timeout;
+
+    showMessage(`Channel removed`, 'info', 5000, () => {
+      clearTimeout(removeTimeouts.current[channel.id]);
+      delete removeTimeouts.current[channel.id];
+      setChannels((prev) => [...prev, channel]); // Restore
+      setMessage({ text: '', type: '' });
+    });
   };
 
   // ─── Action: Open Video Manager ───────────────────────────────────────────
@@ -214,8 +234,8 @@ export default function Home() {
     setManagingChannelId(channelId);
     setLoadingVideos(true);
     try {
-      const allVideos = await api.videos.list(selectedChild.id, true);
-      setChannelVideos(allVideos.filter((v: Video) => v.channelId === channelId));
+      const channelVideosData = await api.videos.list(selectedChild.id, true, channelId);
+      setChannelVideos(channelVideosData);
     } catch {
       setChannelVideos([]);
     } finally {
@@ -456,8 +476,13 @@ export default function Home() {
           </form>
 
           {message.text && !message.text.includes('Settings') && (
-            <div className={`p-4 mb-6 rounded-lg text-sm ${message.type === 'error' ? 'bg-red-50 text-red-700 dark:bg-red-900/20 dark:text-red-400' : message.type === 'info' ? 'bg-blue-50 text-blue-700 dark:bg-blue-900/20 dark:text-blue-400' : 'bg-green-50 text-green-700 dark:bg-green-900/20 dark:text-green-400'}`}>
-              {message.text}
+            <div className={`p-4 mb-6 rounded-lg text-sm flex justify-between items-center ${message.type === 'error' ? 'bg-red-50 text-red-700 dark:bg-red-900/20 dark:text-red-400' : message.type === 'info' ? 'bg-blue-50 text-blue-700 dark:bg-blue-900/20 dark:text-blue-400' : 'bg-green-50 text-green-700 dark:bg-green-900/20 dark:text-green-400'}`}>
+              <span>{message.text}</span>
+              {message.onUndo && (
+                <button onClick={message.onUndo} className="font-semibold underline ml-4 hover:opacity-80">
+                  Undo
+                </button>
+              )}
             </div>
           )}
 
@@ -477,8 +502,8 @@ export default function Home() {
                       Manage Videos
                     </button>
                     <button
-                      onClick={() => handleRemoveChannel(channel.id)}
-                      className="px-3 py-1 text-sm text-red-600 bg-red-50 dark:bg-red-900/20 rounded hover:bg-red-100 dark:hover:bg-red-900/40 transition-colors"
+                      onClick={() => handleRemoveChannel(channel)}
+                      className="text-red-500 hover:text-red-700 font-medium text-sm transition-colors px-2 py-1 rounded hover:bg-red-50 dark:hover:bg-red-900/20"
                     >
                       Remove
                     </button>

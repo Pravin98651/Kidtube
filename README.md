@@ -105,10 +105,15 @@
 When a channel is added, the backend automatically:
 1. Fetches the 20 most recent video IDs
 2. Downloads each thumbnail
-3. Runs **TensorFlow.js** + `nsfwjs` locally with a 1.5s timeout
+3. Runs **TensorFlow.js** + `nsfwjs` locally in a concurrent `Promise.all` batch
 4. Rejects any video classified as `Porn`, `Sexy`, or `Hentai`
 
----
+> **Performance Note:** The AI screening process utilizes concurrent batch processing to minimize blocking the Node.js event loop, ensuring fast channel onboarding even for large playlists.
+
+### 🛡️ Security Enhancements
+- **Strict CORS Origin Filtering:** Backend prevents unauthorized web-client requests.
+- **Environment Variable Validation:** Fail-fast mechanisms ensure critical keys (`JWT_SECRET`, `SYNC_SECRET`) are present at startup.
+- **Parent Override Mode:** Secure PIN/Password challenges allow temporary overrides on the sleep screen.
 
 ## 🚀 Getting Started
 

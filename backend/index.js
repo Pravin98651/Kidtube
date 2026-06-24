@@ -14,11 +14,33 @@ require('dotenv').config();
 const express = require('express');
 const cors = require('cors');
 
+// ─── Environment Integrity Checks ─────────────────────────────────────────────
+if (!process.env.JWT_SECRET) {
+  console.error('❌ FATAL: JWT_SECRET environment variable is missing.');
+  process.exit(1);
+}
+if (!process.env.SYNC_SECRET) {
+  console.error('❌ FATAL: SYNC_SECRET environment variable is missing.');
+  process.exit(1);
+}
+
 const app = express();
 const PORT = process.env.PORT || 8080;
 
 // ─── Global Middleware ────────────────────────────────────────────────────────
-app.use(cors());
+const allowedOrigins = process.env.ALLOWED_ORIGINS 
+  ? process.env.ALLOWED_ORIGINS.split(',') 
+  : ['http://localhost:3000', 'exp://localhost:8081'];
+
+app.use(cors({
+  origin: function (origin, callback) {
+    if (!origin || allowedOrigins.includes(origin) || origin.startsWith('exp://')) {
+      callback(null, true);
+    } else {
+      callback(new Error('Not allowed by CORS'));
+    }
+  }
+}));
 app.use(express.json({ limit: '1mb' }));
 
 // ─── Health Check ─────────────────────────────────────────────────────────────
@@ -53,12 +75,4 @@ app.use((err, _req, res, _next) => {
 // ─── Start Server ─────────────────────────────────────────────────────────────
 app.listen(PORT, () => {
   console.log(`✅ KidTube Backend API listening on port ${PORT}`);
-
-  // Keep Render free-tier instance awake by self-pinging every 14 minutes
-  const PING_URL = process.env.PING_URL || 'https://kidtube-almy.onrender.com/health';
-  setInterval(() => {
-    fetch(PING_URL)
-      .then((r) => { if (r.ok) console.log('[KeepAlive] ping OK'); })
-      .catch(() => { /* ignore ping errors — network may be briefly unavailable */ });
-  }, 14 * 60 * 1000);
 });

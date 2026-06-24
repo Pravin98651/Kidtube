@@ -24,12 +24,22 @@ router.get('/', authenticate, requireQuery('childId'), async (req, res) => {
     const hiddenVideos = childDoc.data().hiddenVideos || [];
     const subscribedChannelIds = subsSnapshot.docs.map((doc) => doc.id);
 
-    if (subscribedChannelIds.length === 0) return res.status(200).json([]);
+    let targetChannelIds = subscribedChannelIds;
+    // If a specific channelId is requested, ensure the child is subscribed to it
+    if (req.query.channelId) {
+      if (subscribedChannelIds.includes(req.query.channelId)) {
+        targetChannelIds = [req.query.channelId];
+      } else {
+        return res.status(403).json({ error: 'Child is not subscribed to this channel.' });
+      }
+    }
 
-    // Fetch videos for all subscribed channels in parallel
+    if (targetChannelIds.length === 0) return res.status(200).json([]);
+
+    // Fetch videos for target channels in parallel
     const videoSnapshots = await Promise.all(
-      subscribedChannelIds.map((channelId) =>
-        db.collection('videos').where('channelId', '==', channelId).limit(50).get()
+      targetChannelIds.map((cid) =>
+        db.collection('videos').where('channelId', '==', cid).limit(50).get()
       )
     );
 

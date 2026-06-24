@@ -84,8 +84,11 @@ export const api = {
 
   // ─── Videos ─────────────────────────────────────────────────────────────────
   videos: {
-    list: (childId: string, includeHidden = false) =>
-      apiFetch<any[]>(`/api/videos?childId=${childId}&includeHidden=${includeHidden}`),
+    list: (childId: string, includeHidden = false, channelId?: string) => {
+      const qs = new URLSearchParams({ childId, includeHidden: String(includeHidden) });
+      if (channelId) qs.append('channelId', channelId);
+      return apiFetch<any[]>(`/api/videos?${qs.toString()}`);
+    },
     hide: (childId: string, videoId: string) =>
       apiFetch('/api/videos/hide', { method: 'POST', body: JSON.stringify({ childId, videoId }) }),
     unhide: (childId: string, videoId: string) =>

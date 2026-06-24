@@ -140,7 +140,7 @@ async function filterAndGetVideos(videoIds, disableShorts = true, blockedCategor
       id: videoIds.join(',')
     });
 
-    const approvedVideos = [];
+    const candidateVideos = [];
 
     for (const video of res.data.items) {
       const categoryId = video.snippet.categoryId;
@@ -164,10 +164,15 @@ async function filterAndGetVideos(videoIds, disableShorts = true, blockedCategor
       if ((disableShorts && (isShortDuration || hasShortsTag || hasShortsInTitleDesc)) || isBlockedCategory || containsBlockedKeyword) {
         continue;
       }
+      
+      candidateVideos.push(video);
+    }
 
-      // --- AI THUMBNAIL SCREENING ---
+    // --- CONCURRENT AI THUMBNAIL SCREENING ---
+    const approvedVideos = [];
+    
+    await Promise.all(candidateVideos.map(async (video) => {
       const thumbnails = video.snippet.thumbnails;
-      // Prefer highest quality available
       const bestThumbnail = thumbnails.maxres || thumbnails.high || thumbnails.medium || thumbnails.default;
       let isAiFlagged = false;
 
@@ -192,22 +197,20 @@ async function filterAndGetVideos(videoIds, disableShorts = true, blockedCategor
         }
       }
 
-      if (isAiFlagged) {
-        continue;
+      if (!isAiFlagged) {
+        approvedVideos.push({
+          videoId: video.id || '',
+          title: video.snippet.title || '',
+          description: video.snippet.description || '',
+          thumbnails: video.snippet.thumbnails || {},
+          channelId: video.snippet.channelId || '',
+          channelTitle: video.snippet.channelTitle || 'Unknown Channel',
+          categoryId: video.snippet.categoryId || '',
+          duration: parseDurationToSeconds(video.contentDetails.duration) || 0,
+          publishedAt: video.snippet.publishedAt || new Date().toISOString()
+        });
       }
-
-      approvedVideos.push({
-        videoId: video.id || '',
-        title: video.snippet.title || '',
-        description: video.snippet.description || '',
-        thumbnails: video.snippet.thumbnails || {},
-        channelId: video.snippet.channelId || '',
-        channelTitle: video.snippet.channelTitle || 'Unknown Channel',
-        categoryId: video.snippet.categoryId || '',
-        duration: durationSecs || 0,
-        publishedAt: video.snippet.publishedAt || new Date().toISOString()
-      });
-    }
+    }));
 
     return approvedVideos;
   } catch (error) {

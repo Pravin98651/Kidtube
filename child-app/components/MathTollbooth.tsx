@@ -11,17 +11,18 @@ export default function MathTollbooth({ onSuccess }: MathTollboothProps) {
   const [operator, setOperator] = useState('+');
   const [userAnswer, setUserAnswer] = useState('');
   const [error, setError] = useState(false);
+  const [failedAttempts, setFailedAttempts] = useState(0);
 
   useEffect(() => {
     generateQuestion();
   }, []);
 
-  const generateQuestion = () => {
-    const isAdd = Math.random() > 0.5;
+  const generateQuestion = (isEasyMode = false) => {
+    const isAdd = isEasyMode ? true : Math.random() > 0.5;
     let n1, n2;
     if (isAdd) {
-      n1 = Math.floor(Math.random() * 9) + 1;
-      n2 = Math.floor(Math.random() * 9) + 1;
+      n1 = isEasyMode ? Math.floor(Math.random() * 5) + 1 : Math.floor(Math.random() * 9) + 1;
+      n2 = isEasyMode ? Math.floor(Math.random() * 5) + 1 : Math.floor(Math.random() * 9) + 1;
       setOperator('+');
     } else {
       n1 = Math.floor(Math.random() * 9) + 5;
@@ -41,10 +42,16 @@ export default function MathTollbooth({ onSuccess }: MathTollboothProps) {
     } else if (val === 'OK') {
       const correctAnswer = operator === '+' ? num1 + num2 : num1 - num2;
       if (parseInt(userAnswer) === correctAnswer) {
+        setFailedAttempts(0);
         onSuccess();
       } else {
         setError(true);
         setUserAnswer('');
+        const newFails = failedAttempts + 1;
+        setFailedAttempts(newFails);
+        if (newFails >= 3) {
+          generateQuestion(true); // Switch to easy mode
+        }
       }
     } else {
       if (userAnswer.length < 3) {
