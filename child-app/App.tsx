@@ -64,8 +64,6 @@ const VideoCard = memo(({ video, onPress }: { video: Video, onPress: () => void 
 });
 VideoCard.displayName = 'VideoCard';
 
-
-
 export default function App() {
   const [token, setToken] = useState<string | null>(null);
   const [email, setEmail] = useState('');
@@ -97,25 +95,6 @@ export default function App() {
   const [overrideUnlocked, setOverrideUnlocked] = useState(false);
   const [showOverrideInput, setShowOverrideInput] = useState(false);
   const [overridePassword, setOverridePassword] = useState('');
-
-  const onViewableItemsChangedRef = useRef<any>(null);
-  onViewableItemsChangedRef.current = ({ viewableItems }: any) => {
-    const visibleItem = viewableItems.find((item: any) => item.isViewable);
-    if (visibleItem) {
-      setPlayingShortId(visibleItem.item.videoId);
-    }
-  };
-
-  const viewabilityConfigCallbackPairs = useRef([
-    {
-      viewabilityConfig: { itemVisiblePercentThreshold: 50 },
-      onViewableItemsChanged: (...args: any) => {
-        if (onViewableItemsChangedRef.current) {
-          onViewableItemsChangedRef.current(...args);
-        }
-      },
-    },
-  ]);
 
   const baseUrl = 'https://kidtube-almy.onrender.com'; // kept for login handler below
   const api = useApi();
@@ -475,7 +454,11 @@ export default function App() {
           snapToAlignment="start"
           windowSize={3}
           initialNumToRender={2}
-          viewabilityConfigCallbackPairs={viewabilityConfigCallbackPairs.current}
+          onMomentumScrollEnd={(e) => {
+            const index = Math.round(e.nativeEvent.contentOffset.y / (SCREEN_HEIGHT - 190));
+            const safeIndex = Math.min(index, shortsVideos.length - 1);
+            if (safeIndex >= 0 && shortsVideos[safeIndex]) setPlayingShortId(shortsVideos[safeIndex].videoId);
+          }}
         />
       </View>
     );
@@ -613,7 +596,7 @@ const styles = StyleSheet.create({
   shortPlayIcon: { width: 64, height: 64, borderRadius: 32, backgroundColor: 'rgba(255,255,255,0.3)', justifyContent: 'center', alignItems: 'center' },
   shortPlayTriangle: { width: 0, height: 0, borderStyle: 'solid', borderLeftWidth: 20, borderBottomWidth: 14, borderTopWidth: 14, borderLeftColor: '#FFFFFF', borderRightColor: 'transparent', borderBottomColor: 'transparent', borderTopColor: 'transparent', marginLeft: 6 },
   shortOverlay: { position: 'absolute', bottom: 16, left: 14, right: 70 },
-  shortTitle: { color: '#FFF', fontSize: 14, fontWeight: '600', marginBottom: 10, textShadow: '1px 1px 4px rgba(0,0,0,0.8)', lineHeight: 20 },
+  shortTitle: { color: '#FFF', fontSize: 14, fontWeight: '600', marginBottom: 10, textShadowColor: 'rgba(0,0,0,0.8)', textShadowOffset: {width:1,height:1}, textShadowRadius: 4, lineHeight: 20 },
   shortChannelRow: { flexDirection: 'row', alignItems: 'center' },
   shortChannelAvatar: { width: 28, height: 28, borderRadius: 14, marginRight: 8, borderWidth: 1, borderColor: 'rgba(255,255,255,0.3)' },
   shortSubtitle: { color: '#FFF', fontSize: 13, fontWeight: '500' },
