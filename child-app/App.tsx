@@ -98,13 +98,20 @@ export default function App() {
   const [showOverrideInput, setShowOverrideInput] = useState(false);
   const [overridePassword, setOverridePassword] = useState('');
 
+  const onViewableItemsChangedRef = useRef<any>(null);
+  onViewableItemsChangedRef.current = ({ viewableItems }: any) => {
+    const visibleItem = viewableItems.find((item: any) => item.isViewable);
+    if (visibleItem) {
+      setPlayingShortId(visibleItem.item.videoId);
+    }
+  };
+
   const viewabilityConfigCallbackPairs = useRef([
     {
       viewabilityConfig: { itemVisiblePercentThreshold: 50 },
-      onViewableItemsChanged: ({ viewableItems }: any) => {
-        const visibleItem = viewableItems.find((item: any) => item.isViewable);
-        if (visibleItem) {
-          setPlayingShortId(visibleItem.item.videoId);
+      onViewableItemsChanged: (...args: any) => {
+        if (onViewableItemsChangedRef.current) {
+          onViewableItemsChangedRef.current(...args);
         }
       },
     },
