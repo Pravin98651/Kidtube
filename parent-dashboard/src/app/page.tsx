@@ -141,6 +141,23 @@ export default function Home() {
     }
   };
 
+  // ─── Action: Delete Child ─────────────────────────────────────────────────
+  const handleDeleteChild = async (e: React.MouseEvent, childId: string) => {
+    e.stopPropagation(); // prevent opening the child dashboard
+    if (!confirm('Are you sure you want to delete this profile? This cannot be undone.')) return;
+    
+    try {
+      await api.children.delete(childId);
+      setChildren(prev => prev.filter(c => c.id !== childId));
+      if (selectedChild?.id === childId) {
+        setSelectedChild(null);
+      }
+      showMessage('Profile deleted.', 'success');
+    } catch (err: any) {
+      showMessage(err.message || 'Failed to delete profile.', 'error');
+    }
+  };
+
   // ─── Action: Save Child Settings ──────────────────────────────────────────
   const handleUpdateChildSettings = async () => {
     if (!selectedChild) return;
@@ -294,11 +311,18 @@ export default function Home() {
             ) : (
               <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-8">
                 {children.map((child) => (
-                  <button
+                  <div
                     key={child.id}
                     onClick={() => setSelectedChild(child)}
-                    className="flex flex-col items-center justify-center p-6 bg-gray-50 dark:bg-gray-900 rounded-xl border-2 border-transparent hover:border-blue-500 transition-all group"
+                    className="flex flex-col items-center justify-center p-6 bg-gray-50 dark:bg-gray-900 rounded-xl border-2 border-transparent hover:border-blue-500 transition-all group relative cursor-pointer"
                   >
+                    <button 
+                      onClick={(e) => handleDeleteChild(e, child.id)}
+                      className="absolute top-2 right-2 w-8 h-8 flex items-center justify-center bg-white/50 hover:bg-red-100 rounded-full text-lg opacity-0 group-hover:opacity-100 transition-opacity"
+                      title="Delete Profile"
+                    >
+                      🗑️
+                    </button>
                     <div className="w-20 h-20 bg-blue-100 dark:bg-blue-900/30 rounded-full flex items-center justify-center mb-4 group-hover:scale-105 transition-transform">
                       <span className="text-3xl">👦</span>
                     </div>
@@ -306,7 +330,7 @@ export default function Home() {
                     <div className="text-sm text-yellow-500 font-medium flex items-center gap-1 mt-1">
                       <span>⭐</span> {child.stars || 0}
                     </div>
-                  </button>
+                    </div>
                 ))}
               </div>
             )}

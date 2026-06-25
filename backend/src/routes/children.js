@@ -77,5 +77,32 @@ router.post('/:childId/settings', authenticate, async (req, res) => {
     res.status(500).json({ error: 'Failed to update child settings.' });
   }
 });
+// DELETE /api/children/:childId — remove a child profile and its subscriptions
+router.delete('/:childId', authenticate, async (req, res) => {
+  const { childId } = req.params;
+  try {
+    const childRef = db
+      .collection('users')
+      .doc(req.user.uid)
+      .collection('children')
+      .doc(childId);
+
+    // Optional: Delete subcollections like subscriptions (Firestore doesn't auto-delete subcollections)
+    const subsSnapshot = await childRef.collection('subscriptions').get();
+    const batch = db.batch();
+    subsSnapshot.docs.forEach((doc) => {
+      batch.delete(doc.ref);
+    });
+    
+    // Delete the child document itself
+    batch.delete(childRef);
+    await batch.commit();
+
+    res.status(200).json({ success: true, message: 'Child profile deleted.' });
+  } catch (err) {
+    console.error('[children] delete error:', err.message);
+    res.status(500).json({ error: 'Failed to delete child profile.' });
+  }
+});
 
 module.exports = router;

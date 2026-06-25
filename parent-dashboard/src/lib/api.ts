@@ -71,6 +71,8 @@ export const api = {
         method: 'POST',
         body: JSON.stringify(settings),
       }),
+    delete: (childId: string) =>
+      apiFetch(`/api/children/${childId}`, { method: 'DELETE' }),
   },
 
   // ─── Channels ───────────────────────────────────────────────────────────────
